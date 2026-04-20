@@ -1,9 +1,11 @@
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getFavorites, getRecommendations, toggleFavorite } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { relativeDateLabel, formatShortDate } from '../../lib/date';
+import { selectionTick, lightImpact } from '../../lib/haptics';
 import { useProfile } from '../../lib/profile';
 import { theme } from '../../lib/theme';
 import type { RankedEvent, RecommendationsResponse } from '../../lib/types';
@@ -16,6 +18,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(async () => {
     setError(null);
@@ -45,11 +48,13 @@ export default function Home() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    lightImpact();
     await load();
     setRefreshing(false);
   };
 
   const handleToggleFavorite = async (eventId: string) => {
+    selectionTick();
     const previous = favorites;
     const next = new Set(previous);
     if (next.has(eventId)) next.delete(eventId);
@@ -65,6 +70,25 @@ export default function Home() {
 
   const events = data?.events ?? [];
   const top = data?.recommendations?.[0] ?? null;
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEvents = useMemo(() => {
+    if (!normalizedQuery) return events;
+    return events.filter((event) => {
+      const hay = [
+        event.title,
+        event.description,
+        event.summary,
+        event.city,
+        event.country,
+        event.source,
+        (event.tags ?? []).join(' ')
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(normalizedQuery);
+    });
+  }, [events, normalizedQuery]);
 
   const headerSubtitle = useMemo(() => {
     const name = user?.name?.split(' ')[0] ?? user?.email ?? 'tech';
@@ -84,9 +108,10 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <FlatList
-        data={events}
+        data={filteredEvents}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.accent} />
         }
@@ -95,9 +120,31 @@ export default function Home() {
             <Text style={styles.eyebrow}>RADAR</Text>
             <Text style={styles.title}>Recomendaciones para ti</Text>
             <Text style={styles.subtitle}>{headerSubtitle}</Text>
-            {top ? <TopCard event={top} /> : null}
+
+            <View style={styles.searchWrapper}>
+              <Text style={styles.searchGlyph}>⌕</Text>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Buscar por título, ciudad, tag…"
+                placeholderTextColor={theme.colors.muted}
+                style={styles.searchInput}
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {query.length > 0 ? (
+                <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                  <Text style={styles.searchClear}>✕</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {!normalizedQuery && top ? <TopCard event={top} /> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Text style={[styles.eyebrow, styles.listLabel]}>LISTA COMPLETA</Text>
+            <Text style={[styles.eyebrow, styles.listLabel]}>
+              {normalizedQuery ? `RESULTADOS (${filteredEvents.length})` : 'LISTA COMPLETA'}
+            </Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -110,7 +157,11 @@ export default function Home() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.subtitle}>Todavía no hay eventos. Baja para actualizar.</Text>
+            <Text style={styles.subtitle}>
+              {normalizedQuery
+                ? 'Sin resultados para tu búsqueda. Prueba con otra palabra.'
+                : 'Todavía no hay eventos. Baja para actualizar.'}
+            </Text>
           </View>
         }
       />
@@ -119,6 +170,9 @@ export default function Home() {
 }
 
 function TopCard({ event }: { event: RankedEvent }) {
+  const relative = relativeDateLabel(event.date);
+  const short = formatShortDate(event.date);
+
   return (
     <Link href={{ pathname: '/event/[id]', params: { id: event.id } }} asChild>
       <Pressable style={styles.topCard}>
@@ -126,6 +180,14 @@ function TopCard({ event }: { event: RankedEvent }) {
         <Text style={styles.topTitle} numberOfLines={2}>
           {event.title}
         </Text>
+        {relative ? (
+          <View style={styles.dateRow}>
+            <View style={styles.dateChip}>
+              <Text style={styles.dateChipText}>{relative}</Text>
+            </View>
+            <Text style={styles.dateFull}>{short}</Text>
+          </View>
+        ) : null}
         <Text style={styles.topMeta}>
           {event.city}, {event.country} · {event.source}
         </Text>
@@ -147,6 +209,8 @@ function EventRow({
   favorite: boolean;
   onToggleFavorite: () => void;
 }) {
+  const relative = relativeDateLabel(event.date);
+
   return (
     <View style={styles.row}>
       <Link href={{ pathname: '/event/[id]', params: { id: event.id } }} asChild>
@@ -155,7 +219,8 @@ function EventRow({
             {event.title}
           </Text>
           <Text style={styles.rowMeta} numberOfLines={1}>
-            {event.city}, {event.country} · {event.rankLabel}
+            {event.city}, {event.country}
+            {relative ? ` · ${relative}` : ''}
           </Text>
         </Pressable>
       </Link>
@@ -175,6 +240,21 @@ const styles = StyleSheet.create({
   listLabel: { marginTop: theme.space(6) },
   title: { color: theme.colors.textPrimary, fontSize: 26, fontWeight: '700' },
   subtitle: { color: theme.colors.textSecondary, fontSize: 14 },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.space(2),
+    paddingHorizontal: theme.space(3),
+    paddingVertical: theme.space(2),
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.md,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    marginTop: theme.space(1)
+  },
+  searchGlyph: { color: theme.colors.muted, fontSize: 18 },
+  searchInput: { flex: 1, color: theme.colors.textPrimary, fontSize: 14, paddingVertical: theme.space(1) },
+  searchClear: { color: theme.colors.muted, fontSize: 14, paddingHorizontal: theme.space(1) },
   topCard: {
     backgroundColor: theme.colors.surface,
     padding: theme.space(5),
@@ -185,6 +265,15 @@ const styles = StyleSheet.create({
   },
   topLabel: { color: theme.colors.accent, fontSize: 12, letterSpacing: 1 },
   topTitle: { color: theme.colors.textPrimary, fontSize: 20, fontWeight: '700' },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: theme.space(2) },
+  dateChip: {
+    paddingHorizontal: theme.space(2),
+    paddingVertical: theme.space(1),
+    backgroundColor: theme.colors.accentSoft,
+    borderRadius: theme.radius.sm
+  },
+  dateChipText: { color: theme.colors.textPrimary, fontSize: 12, fontWeight: '600' },
+  dateFull: { color: theme.colors.muted, fontSize: 12 },
   topMeta: { color: theme.colors.muted, fontSize: 13 },
   topSummary: { color: theme.colors.textSecondary, fontSize: 14, lineHeight: 20 },
   topReasons: { color: theme.colors.accent, fontSize: 12, marginTop: theme.space(1) },
