@@ -169,12 +169,18 @@ function daysUntil(dateIso: string): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-export function parseChatInterpretation(message: string): ChatInterpretation {
+export function parseChatInterpretation(message: string, knownCities: string[] = []): ChatInterpretation {
   const normalized = normalizeText(message);
   const interests = INTEREST_KEYWORDS.filter((keyword) => normalized.includes(keyword));
   const role = Object.entries(ROLE_KEYWORDS).find(([keyword]) => normalized.includes(keyword))?.[1];
   const level = Object.entries(LEVEL_KEYWORDS).find(([keyword]) => normalized.includes(keyword))?.[1];
   const country = COUNTRY_KEYWORDS.find(([keyword]) => normalized.includes(keyword))?.[1];
+
+  // Match the longest city name first so "santo domingo" wins over "santo".
+  const city = [...knownCities]
+    .filter((name) => name && name.trim())
+    .sort((a, b) => b.length - a.length)
+    .find((name) => normalized.includes(normalizeText(name)));
 
   let timeWindowDays = 30;
   if (normalized.includes('esta semana') || normalized.includes('semana')) {
@@ -188,6 +194,7 @@ export function parseChatInterpretation(message: string): ChatInterpretation {
   return {
     originalMessage: message,
     country,
+    city,
     role,
     level,
     interests: [...new Set(interests)],
@@ -202,11 +209,12 @@ export function filterByInterpretation(events: TechEvent[], interpretation: Chat
     const eventDate = new Date(event.date);
     const days = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const countryOk = interpretation.country ? normalizeText(event.country) === normalizeText(interpretation.country) : true;
+    const cityOk = interpretation.city ? normalizeText(event.city) === normalizeText(interpretation.city) : true;
     const levelOk = interpretation.level ? levelMatch(interpretation.level, event.level) : true;
     const interestOk = interpretation.interests.length > 0 ? interpretation.interests.some((interest) => event.tags.map(normalizeText).includes(interest)) : true;
     const timeOk = days >= 0 && days <= interpretation.timeWindowDays;
 
-    return countryOk && levelOk && interestOk && timeOk;
+    return countryOk && cityOk && levelOk && interestOk && timeOk;
   });
 }
 

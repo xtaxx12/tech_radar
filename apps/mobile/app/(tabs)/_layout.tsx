@@ -33,6 +33,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="favorites"
+        options={{
+          title: 'Favoritos',
+          tabBarIcon: ({ color }) => <TabIcon glyph="★" color={color} />
+        }}
+      />
+      <Tabs.Screen
         name="chat"
         options={{
           title: 'Chat IA',

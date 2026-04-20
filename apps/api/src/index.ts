@@ -259,7 +259,9 @@ app.get('/sync/status', (_request, response) => {
 app.post('/chat', chatAuthGate, asyncHandler(async (request, response) => {
 	const message = String(request.body?.message ?? '').slice(0, 2000);
 	const fallbackProfile = parseProfile(request.body?.profile ?? {});
-	const interpretation = parseChatInterpretation(message);
+	const allEvents = await ensureEventsLoaded();
+	const knownCities = [...new Set(allEvents.map((event) => event.city).filter(Boolean))];
+	const interpretation = parseChatInterpretation(message, knownCities);
 	const mergedInterpretation = {
 		...interpretation,
 		country: interpretation.country ?? fallbackProfile.country,
@@ -268,7 +270,6 @@ app.post('/chat', chatAuthGate, asyncHandler(async (request, response) => {
 		interests: interpretation.interests.length > 0 ? interpretation.interests : fallbackProfile.interests
 	};
 
-	const allEvents = await ensureEventsLoaded();
 	const filtered = filterByInterpretation(allEvents, mergedInterpretation);
 	const ranked = rankEvents(filtered.length > 0 ? filtered : allEvents, fallbackProfile, 8);
 	const answer = await generateChatAnswer(message, ranked, mergedInterpretation);

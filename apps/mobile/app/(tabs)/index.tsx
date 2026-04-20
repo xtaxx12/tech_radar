@@ -1,7 +1,21 @@
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { EMPTY_FILTERS, FilterBar, type HomeFilters } from '../../components/FilterBar';
 import { getFavorites, getRecommendations, toggleFavorite } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { relativeDateLabel, formatShortDate } from '../../lib/date';
@@ -9,6 +23,10 @@ import { selectionTick, lightImpact } from '../../lib/haptics';
 import { useProfile } from '../../lib/profile';
 import { theme } from '../../lib/theme';
 import type { RankedEvent, RecommendationsResponse } from '../../lib/types';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function Home() {
   const { user } = useAuth();
@@ -19,6 +37,7 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<HomeFilters>(EMPTY_FILTERS);
 
   const load = useCallback(async () => {
     setError(null);
@@ -71,24 +90,45 @@ export default function Home() {
   const events = data?.events ?? [];
   const top = data?.recommendations?.[0] ?? null;
 
+  const availableCountries = useMemo(
+    () => [...new Set(events.map((e) => e.country).filter(Boolean))].sort(),
+    [events]
+  );
+  const availableSources = useMemo(
+    () => [...new Set(events.map((e) => e.source).filter(Boolean))].sort(),
+    [events]
+  );
+
   const normalizedQuery = query.trim().toLowerCase();
   const filteredEvents = useMemo(() => {
-    if (!normalizedQuery) return events;
     return events.filter((event) => {
-      const hay = [
-        event.title,
-        event.description,
-        event.summary,
-        event.city,
-        event.country,
-        event.source,
-        (event.tags ?? []).join(' ')
-      ]
-        .join(' ')
-        .toLowerCase();
-      return hay.includes(normalizedQuery);
+      if (filters.country && event.country !== filters.country) return false;
+      if (filters.source && event.source !== filters.source) return false;
+      if (filters.favoritesOnly && !favorites.has(event.id)) return false;
+      if (normalizedQuery) {
+        const hay = [
+          event.title,
+          event.description,
+          event.summary,
+          event.city,
+          event.country,
+          event.source,
+          (event.tags ?? []).join(' ')
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(normalizedQuery)) return false;
+      }
+      return true;
     });
-  }, [events, normalizedQuery]);
+  }, [events, normalizedQuery, filters, favorites]);
+
+  const handleFiltersChange = useCallback((next: HomeFilters) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setFilters(next);
+  }, []);
+
+  const hasActiveFilter = Boolean(filters.country || filters.source || filters.favoritesOnly);
 
   const headerSubtitle = useMemo(() => {
     const name = user?.name?.split(' ')[0] ?? user?.email ?? 'tech';
@@ -140,19 +180,31 @@ export default function Home() {
               ) : null}
             </View>
 
-            {!normalizedQuery && top ? <TopCard event={top} /> : null}
+            <FilterBar
+              filters={filters}
+              onChange={handleFiltersChange}
+              availableCountries={availableCountries}
+              availableSources={availableSources}
+              favoritesCount={favorites.size}
+            />
+
+            {!normalizedQuery && !hasActiveFilter && top ? <TopCard event={top} /> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Text style={[styles.eyebrow, styles.listLabel]}>
-              {normalizedQuery ? `RESULTADOS (${filteredEvents.length})` : 'LISTA COMPLETA'}
+              {normalizedQuery || hasActiveFilter
+                ? `RESULTADOS (${filteredEvents.length})`
+                : 'LISTA COMPLETA'}
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <EventRow
-            event={item}
-            favorite={favorites.has(item.id)}
-            onToggleFavorite={() => handleToggleFavorite(item.id)}
-          />
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 25).duration(180)}>
+            <EventRow
+              event={item}
+              favorite={favorites.has(item.id)}
+              onToggleFavorite={() => handleToggleFavorite(item.id)}
+            />
+          </Animated.View>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={

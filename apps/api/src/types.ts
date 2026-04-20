@@ -73,6 +73,7 @@ export interface SyncResult {
 
 export interface ChatInterpretation {
   country?: string;
+  city?: string;
   role?: Role;
   level?: Exclude<Level, 'all'>;
   interests: string[];
