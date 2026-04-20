@@ -8,6 +8,7 @@ type Props = {
   onSubmit: () => void;
   loading: boolean;
   response: ChatResponse | null;
+  error: string | null;
   onOpenEvent: (eventId: string) => void;
 };
 
@@ -17,16 +18,24 @@ const promptShortcuts = [
   'Eventos de data en Perú este mes'
 ];
 
-export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading, response, onOpenEvent }: Props) {
+export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading, response, error, onOpenEvent }: Props) {
+  const placeholder = `Ejemplo: Eventos de IA esta semana en ${profile.country} para ${profile.level}`;
+
   return (
-    <section className="panel chat-panel">
+    <section className="panel chat-panel" aria-label="Chat IA de recomendación de eventos">
       <div className="eyebrow">Chat IA</div>
       <h2>Busca eventos como si hablaras con un curador local.</h2>
-      <p className="muted">Pregunta algo como “Eventos de IA esta semana en Ecuador para junior” y obtén una lista filtrada con explicación.</p>
+      <p className="muted">Pregunta algo como "Eventos de IA esta semana en Ecuador para junior" y obtén una lista filtrada con explicación.</p>
 
-      <div className="prompt-pills">
-        {promptShortcuts.map((shortcut) => (
-          <button key={shortcut} type="button" className="prompt-pill" onClick={() => onMessageChange(shortcut)}>
+      <div className="prompt-pills" role="group" aria-label="Sugerencias de consulta">
+        {promptShortcuts.map((shortcut, index) => (
+          <button
+            key={index}
+            type="button"
+            className="prompt-pill"
+            onClick={() => onMessageChange(shortcut)}
+            aria-label={`Usar sugerencia: ${shortcut}`}
+          >
             {shortcut}
           </button>
         ))}
@@ -37,12 +46,26 @@ export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading
           rows={4}
           value={message}
           onChange={(event) => onMessageChange(event.target.value)}
-          placeholder={`Ejemplo: Eventos de IA esta semana en ${profile.country} para ${profile.level}`}
+          placeholder={placeholder}
+          aria-label="Mensaje para la IA"
         />
-        <button className="primary-button" type="button" onClick={onSubmit} disabled={loading || message.trim().length === 0}>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={onSubmit}
+          disabled={loading || message.trim().length === 0}
+          aria-label="Enviar consulta al chat IA"
+        >
           {loading ? 'Consultando IA...' : 'Consultar'}
         </button>
       </div>
+
+      {error ? (
+        <div className="chat-error" role="alert">
+          <strong>No pudimos consultar la IA.</strong>
+          <span>{error}</span>
+        </div>
+      ) : null}
 
       {response ? (
         <div className="chat-response">
@@ -50,13 +73,18 @@ export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading
           <div className="chat-meta">Filtros detectados: {formatInterpretation(response)}</div>
           <div className="chat-results">
             {response.events.slice(0, 3).map((event) => (
-              <EventCard key={event.id} event={event} onOpen={() => onOpenEvent(event.id)} />
+              <EventCard
+                key={event.id}
+                event={event}
+                compact
+                onOpen={() => onOpenEvent(event.id)}
+              />
             ))}
           </div>
         </div>
-      ) : (
+      ) : !error ? (
         <div className="chat-empty">Tu consulta aparecerá aquí con eventos filtrados y una explicación automática.</div>
-      )}
+      ) : null}
     </section>
   );
 }

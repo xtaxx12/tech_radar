@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getChatResponse, getEventDetail, getProfileOptions, getRecommendations } from './api';
 import { ChatPanel } from './components/ChatPanel';
 import { EventCard } from './components/EventCard';
+import { EventCardSkeletonGrid } from './components/EventCardSkeleton';
 import { EventDetail } from './components/EventDetail';
+import { EventsEmptyState } from './components/EventsEmptyState';
+import { FilterBar, type EventFilters } from './components/FilterBar';
 import { ProfileForm } from './components/ProfileForm';
-import type { ChatResponse, ProfileOptions, RecommendationsResponse, UserProfile } from './types';
+import type { ChatResponse, ProfileOptions, RankedEvent, RecommendationsResponse, UserProfile } from './types';
 
 const defaultProfile: UserProfile = {
   country: 'Ecuador',
@@ -13,19 +16,25 @@ const defaultProfile: UserProfile = {
   interests: ['ia', 'web']
 };
 
+const emptyFilters: EventFilters = { source: '', country: '', city: '' };
+
 export default function App() {
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
   const [options, setOptions] = useState<ProfileOptions | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<RecommendationsResponse['events'][number] | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<RankedEvent | null>(null);
   const [routePath, setRoutePath] = useState(window.location.pathname);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [chatMessage, setChatMessage] = useState('Eventos de IA esta semana en Ecuador para junior');
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
   const [profileReady, setProfileReady] = useState(Boolean(localStorage.getItem('techRadarProfile')));
+  const [filters, setFilters] = useState<EventFilters>(emptyFilters);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+  const scrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     void getProfileOptions().then(setOptions).catch(() => setOptions(null));
@@ -47,6 +56,10 @@ export default function App() {
       setSelectedEvent(null);
       setDetailLoading(false);
       setDetailError(null);
+      const saved = scrollPositionsRef.current['/'];
+      if (typeof saved === 'number') {
+        requestAnimationFrame(() => window.scrollTo({ top: saved, behavior: 'auto' }));
+      }
       return;
     }
 
@@ -56,6 +69,7 @@ export default function App() {
     setDetailLoading(true);
     setDetailError(null);
     setSelectedEvent(null);
+    window.scrollTo({ top: 0, behavior: 'auto' });
 
     getEventDetail(eventId)
       .then((data) => {
@@ -91,7 +105,7 @@ export default function App() {
     let active = true;
 
     setLoadingProfile(true);
-    getRecommendations(profile)
+    getRecommendations(profile, filters)
       .then((data) => {
         if (active) {
           setRecommendations(data);
@@ -111,24 +125,49 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [profile, profileReady]);
+  }, [profile, profileReady, filters]);
 
   const saveProfile = () => {
     setProfileReady(true);
-    localStorage.setItem('techRadarProfile', JSON.stringify(profile));
-    void getRecommendations(profile).then(setRecommendations).catch(() => setRecommendations(null));
   };
 
   const handleChatSubmit = () => {
     setLoadingChat(true);
+    setChatError(null);
     getChatResponse(chatMessage, profile)
       .then((data) => setChatResponse(data))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Ocurrió un error consultando la IA.';
+        setChatError(message);
+        setChatResponse(null);
+      })
       .finally(() => setLoadingChat(false));
   };
 
   const topEvents = recommendations?.recommendations ?? [];
   const allEvents = recommendations?.events ?? [];
+  const totalEvents = recommendations?.context.total ?? allEvents.length;
+  const trendingCount = recommendations?.context.trending ?? 0;
   const isEventRoute = routePath.startsWith('/events/');
+  const hasFilters = Boolean(filters.source || filters.country || filters.city);
+  const isEmpty = profileReady && !loadingProfile && allEvents.length === 0;
+
+  const availableCountries = useMemo(() => {
+    const pool = recommendations?.events ?? [];
+    const set = new Set<string>(pool.map((event) => event.country).filter(Boolean));
+    return [...set].sort();
+  }, [recommendations]);
+
+  const availableCities = useMemo(() => {
+    const pool = recommendations?.events ?? [];
+    const set = new Set<string>(pool.map((event) => event.city).filter(Boolean));
+    return [...set].sort();
+  }, [recommendations]);
+
+  const openEventAndRemember = (eventId: string) => {
+    scrollPositionsRef.current['/'] = window.scrollY;
+    openEvent(eventId);
+  };
 
   if (isEventRoute && detailLoading) {
     return <DetailLoading onBack={handleBackToRadar} />;
@@ -142,32 +181,39 @@ export default function App() {
     return <EventDetail event={selectedEvent} onBack={handleBackToRadar} />;
   }
 
+  const countriesCovered = availableCountries.length || 6;
+  const listLimit = showAllEvents ? allEvents.length : 6;
+  const listSlice = allEvents.slice(0, listLimit);
+
   return (
     <div className="app-shell">
-      <div className="background-orb background-orb-one" />
-      <div className="background-orb background-orb-two" />
+      <div className="background-orb background-orb-one" aria-hidden="true" />
+      <div className="background-orb background-orb-two" aria-hidden="true" />
 
       <header className="topbar">
         <div>
           <div className="brand">Tech Radar LATAM</div>
-          <p className="muted">Descubre eventos tecnológicos relevantes con IA y datos simulados listos para usar.</p>
+          <p className="muted">Descubre eventos tecnológicos relevantes con IA y datos de Meetup, Eventbrite y GDG.</p>
         </div>
-        <div className="status-pill">API + IA fallback local</div>
+        <div className="status-pill" aria-label="Estado de la API">
+          <span className="status-dot" aria-hidden="true" />
+          API + IA fallback local
+        </div>
       </header>
 
       {!profileReady ? (
         <main className="hero-grid">
           <section className="hero-copy panel">
-            <div className="eyebrow">Latam events intelligence</div>
+            <div className="eyebrow">LATAM events intelligence</div>
             <h1>Un radar de eventos tech que entiende tu perfil y te explica el porqué.</h1>
             <p>
               Tech Radar LATAM combina recomendaciones personalizadas, ranking inteligente y chat conversacional para descubrir eventos en Ecuador,
               México, Perú y el resto de la región.
             </p>
             <div className="metric-row">
-              <Metric value="12+" label="eventos simulados" />
-              <Metric value="6" label="países cubiertos" />
-              <Metric value="AI" label="resumen y chat" />
+              <Metric value={totalEvents ? `${totalEvents}` : '—'} label="eventos analizados" />
+              <Metric value={`${countriesCovered}`} label="países cubiertos" />
+              <Metric value="IA" label="resumen y chat" />
             </div>
           </section>
 
@@ -182,12 +228,12 @@ export default function App() {
       ) : (
         <main className="dashboard-grid">
           <aside className="panel sidebar-panel">
-            <div className="eyebrow">Tu perfil</div>
+            <div className="eyebrow">Estás viendo</div>
             <h2>{profile.country}</h2>
             <div className="profile-stack">
               <ProfileField label="Rol" value={profile.role} />
               <ProfileField label="Nivel" value={profile.level} />
-              <ProfileField label="Intereses" value={profile.interests.join(', ')} />
+              <ProfileField label="Intereses" value={profile.interests.join(', ') || '—'} />
             </div>
             <button className="secondary-button" type="button" onClick={() => setProfileReady(false)}>
               Editar perfil
@@ -195,8 +241,8 @@ export default function App() {
 
             <div className="insight-card">
               <div className="insight-label">Resumen del radar</div>
-              <div className="insight-value">{recommendations?.context.total ?? 0} eventos analizados</div>
-              <div className="insight-note">{recommendations?.context.trending ?? 0} marcados como Trending</div>
+              <div className="insight-value">{totalEvents} eventos analizados</div>
+              <div className="insight-note">{trendingCount} marcados como Trending</div>
             </div>
           </aside>
 
@@ -207,40 +253,84 @@ export default function App() {
               <p className="muted">La lista se ordena por país, rol, nivel, intereses y cercanía temporal. Cada evento trae un resumen corto y una razón clara.</p>
 
               <div className="metric-row">
-                <Metric value={topEvents[0]?.rankLabel ?? '---'} label="mejor coincidencia" />
+                <Metric value={topEvents[0]?.rankLabel ?? '—'} label="mejor coincidencia" />
                 <Metric value={topEvents[0]?.score?.toString() ?? '0'} label="score principal" />
-                <Metric value={allEvents.length.toString()} label="eventos disponibles" />
+                <Metric value={totalEvents.toString()} label="eventos disponibles" />
               </div>
+
+              <FilterBar
+                filters={filters}
+                onChange={setFilters}
+                availableCountries={availableCountries}
+                availableCities={availableCities}
+              />
             </section>
 
-            <section className="events-grid">
-              {topEvents.map((event, index) => (
-                <EventCard key={event.id} event={event} featured={index === 0} onOpen={() => openEvent(event.id)} />
-              ))}
-            </section>
-
-            <section className="panel list-panel">
-              <div className="panel-title-row">
-                <div>
-                  <div className="eyebrow">Lista completa</div>
-                  <h2>Más eventos en tu radar</h2>
-                </div>
-                <span className="muted">{loadingProfile ? 'Actualizando...' : 'Ordenado por score'}</span>
-              </div>
-              <div className="compact-list">
-                {allEvents.slice(0, 6).map((event) => (
-                  <div key={event.id} className="compact-row">
-                    <div>
-                      <div className="compact-title">{event.title}</div>
-                      <div className="muted compact-subtitle">{event.city}, {event.country} · {event.rankLabel}</div>
-                    </div>
-                    <button className="compact-score" type="button" onClick={() => openEvent(event.id)}>
-                      {event.score}
-                    </button>
-                  </div>
+            {loadingProfile && allEvents.length === 0 ? (
+              <EventCardSkeletonGrid count={4} />
+            ) : isEmpty ? (
+              <EventsEmptyState
+                title={hasFilters ? 'Sin eventos con esos filtros' : 'Todavía no hay eventos en tu radar'}
+                description={
+                  hasFilters
+                    ? 'Intenta limpiar los filtros o ampliar tu búsqueda a otra ciudad o fuente.'
+                    : 'El backend sigue sincronizando. Vuelve en unos segundos o revisa tu conexión a la API.'
+                }
+                onReset={hasFilters ? () => setFilters(emptyFilters) : undefined}
+              />
+            ) : (
+              <section className="events-grid" aria-busy={loadingProfile}>
+                {topEvents.map((event, index) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    featured={index === 0}
+                    onOpen={() => openEventAndRemember(event.id)}
+                  />
                 ))}
-              </div>
-            </section>
+              </section>
+            )}
+
+            {allEvents.length > 0 ? (
+              <section className="panel list-panel">
+                <div className="panel-title-row">
+                  <div>
+                    <div className="eyebrow">Lista completa</div>
+                    <h2>Más eventos en tu radar</h2>
+                  </div>
+                  <span className="muted">
+                    {loadingProfile ? 'Actualizando…' : `Mostrando ${listSlice.length} de ${allEvents.length}`}
+                  </span>
+                </div>
+                <div className="compact-list">
+                  {listSlice.map((event) => (
+                    <div key={event.id} className="compact-row">
+                      <div>
+                        <div className="compact-title">{event.title}</div>
+                        <div className="muted compact-subtitle">{event.city}, {event.country} · {event.rankLabel}</div>
+                      </div>
+                      <button
+                        className="compact-score"
+                        type="button"
+                        onClick={() => openEventAndRemember(event.id)}
+                        aria-label={`Abrir ${event.title}, score ${event.score}`}
+                      >
+                        {event.score}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {allEvents.length > 6 ? (
+                  <button
+                    type="button"
+                    className="text-link-button list-toggle"
+                    onClick={() => setShowAllEvents((current) => !current)}
+                  >
+                    {showAllEvents ? 'Mostrar menos' : `Mostrar todos (${allEvents.length})`}
+                  </button>
+                ) : null}
+              </section>
+            ) : null}
           </section>
 
           <div className="chat-column">
@@ -251,7 +341,8 @@ export default function App() {
               onSubmit={handleChatSubmit}
               loading={loadingChat}
               response={chatResponse}
-              onOpenEvent={openEvent}
+              error={chatError}
+              onOpenEvent={openEventAndRemember}
             />
           </div>
         </main>
@@ -275,11 +366,12 @@ function DetailLoading({ onBack }: { onBack: () => void }) {
     <main className="detail-shell">
       <section className="panel detail-panel">
         <button className="secondary-button" type="button" onClick={onBack}>
-          Volver al radar
+          ← Volver al radar
         </button>
         <div className="eyebrow">Cargando detalle</div>
         <h1>Estamos cargando el evento</h1>
         <p className="muted">Si la conexión al backend tarda un poco, aquí verás el estado mientras se resuelve.</p>
+        <EventCardSkeletonGrid count={2} />
       </section>
     </main>
   );
@@ -290,7 +382,7 @@ function DetailError({ message, onBack }: { message: string; onBack: () => void 
     <main className="detail-shell">
       <section className="panel detail-panel">
         <button className="secondary-button" type="button" onClick={onBack}>
-          Volver al radar
+          ← Volver al radar
         </button>
         <div className="eyebrow">Detalle no disponible</div>
         <h1>No pudimos abrir este evento</h1>
