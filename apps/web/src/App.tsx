@@ -36,6 +36,7 @@ export default function App() {
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [triggeringSync, setTriggeringSync] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const scrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -44,24 +45,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!syncStatus?.running) {
-      return;
-    }
-
     let active = true;
-    let lastRunning = true;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30;
 
     const timer = setInterval(() => {
+      if (!active) return;
+      attempts += 1;
+      if (attempts > MAX_ATTEMPTS) {
+        clearInterval(timer);
+        return;
+      }
+
       void getSyncStatus()
         .then((status) => {
           if (!active) return;
           setSyncStatus(status);
-          if (lastRunning && !status.running && profileReady) {
-            getRecommendations(profile, filters)
-              .then((data) => { if (active) setRecommendations(data); })
-              .catch(() => undefined);
+
+          const settled = !status.running && status.lastResult !== null;
+          const hasData = (status.lastResult?.saved ?? 0) > 0;
+
+          if (settled && hasData) {
+            setReloadKey((key) => key + 1);
+            clearInterval(timer);
+          } else if (settled && !hasData) {
+            clearInterval(timer);
           }
-          lastRunning = status.running;
         })
         .catch(() => undefined);
     }, 3000);
@@ -70,7 +79,7 @@ export default function App() {
       active = false;
       clearInterval(timer);
     };
-  }, [syncStatus?.running, profileReady, profile, filters]);
+  }, []);
 
   useEffect(() => {
     const onPopState = () => setRoutePath(window.location.pathname);
@@ -157,29 +166,23 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [profile, profileReady, filters]);
+  }, [profile, profileReady, filters, reloadKey]);
 
   const saveProfile = () => {
     setProfileReady(true);
   };
 
-  const refreshSyncStatus = () => {
-    void getSyncStatus().then(setSyncStatus).catch(() => undefined);
-  };
-
   const handleRetrySync = () => {
     setTriggeringSync(true);
-    setSyncStatus((current) => (current ? { ...current, running: true } : current));
+    setSyncStatus((current) => (current ? { ...current, running: true } : { running: true, lastResult: null }));
     triggerSync()
       .then((data) => {
         setSyncStatus({ running: false, lastResult: data.result });
-        return getRecommendations(profile, filters);
+        setReloadKey((key) => key + 1);
       })
-      .then((data) => setRecommendations(data))
       .catch(() => undefined)
       .finally(() => {
         setTriggeringSync(false);
-        refreshSyncStatus();
       });
   };
 
