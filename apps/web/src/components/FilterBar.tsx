@@ -1,3 +1,6 @@
+import { useMemo } from 'react';
+import type { RankedEvent } from '../types';
+
 export type EventFilters = {
   source: string;
   country: string;
@@ -7,8 +10,8 @@ export type EventFilters = {
 type Props = {
   filters: EventFilters;
   onChange: (filters: EventFilters) => void;
-  availableCountries: string[];
-  availableCities: string[];
+  events: RankedEvent[];
+  profileCountry?: string;
 };
 
 const SOURCES: Array<{ value: string; label: string }> = [
@@ -19,9 +22,17 @@ const SOURCES: Array<{ value: string; label: string }> = [
   { value: 'community', label: 'Comunidad' }
 ];
 
-export function FilterBar({ filters, onChange, availableCountries, availableCities }: Props) {
+export function FilterBar({ filters, onChange, events, profileCountry }: Props) {
+  const countryOptions = useMemo(() => buildCountryOptions(events, profileCountry), [events, profileCountry]);
+  const cityOptions = useMemo(() => buildCityOptions(events, filters.country), [events, filters.country]);
+
   const hasFilters = Boolean(filters.source || filters.country || filters.city);
   const clear = () => onChange({ source: '', country: '', city: '' });
+
+  const handleCountryChange = (nextCountry: string) => {
+    const nextCity = nextCountry === filters.country ? filters.city : '';
+    onChange({ ...filters, country: nextCountry, city: nextCity });
+  };
 
   return (
     <div className="filter-bar" role="region" aria-label="Filtros de eventos">
@@ -50,11 +61,13 @@ export function FilterBar({ filters, onChange, availableCountries, availableCiti
           <span>País</span>
           <select
             value={filters.country}
-            onChange={(event) => onChange({ ...filters, country: event.target.value })}
+            onChange={(event) => handleCountryChange(event.target.value)}
           >
             <option value="">Todos</option>
-            {availableCountries.map((country) => (
-              <option key={country} value={country}>{country}</option>
+            {countryOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.count > 0 ? `${option.value} (${option.count})` : `${option.value} · sin eventos`}
+              </option>
             ))}
           </select>
         </label>
@@ -63,10 +76,17 @@ export function FilterBar({ filters, onChange, availableCountries, availableCiti
           <select
             value={filters.city}
             onChange={(event) => onChange({ ...filters, city: event.target.value })}
+            disabled={cityOptions.length === 0}
           >
-            <option value="">Todas</option>
-            {availableCities.map((city) => (
-              <option key={city} value={city}>{city}</option>
+            <option value="">
+              {filters.country
+                ? (cityOptions.length > 0 ? 'Todas' : 'Sin ciudades disponibles')
+                : 'Selecciona un país'}
+            </option>
+            {cityOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.value} ({option.count})
+              </option>
             ))}
           </select>
         </label>
@@ -78,4 +98,48 @@ export function FilterBar({ filters, onChange, availableCountries, availableCiti
       </div>
     </div>
   );
+}
+
+type Option = { value: string; count: number };
+
+function buildCountryOptions(events: RankedEvent[], profileCountry: string | undefined): Option[] {
+  const counts = new Map<string, number>();
+
+  for (const event of events) {
+    const country = event.country?.trim();
+    if (!country || country.toLowerCase() === 'latam') continue;
+    counts.set(country, (counts.get(country) ?? 0) + 1);
+  }
+
+  if (profileCountry && !counts.has(profileCountry)) {
+    counts.set(profileCountry, 0);
+  }
+
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => {
+      if (a.count !== b.count) return b.count - a.count;
+      return a.value.localeCompare(b.value);
+    });
+}
+
+function buildCityOptions(events: RankedEvent[], selectedCountry: string): Option[] {
+  if (!selectedCountry) return [];
+
+  const counts = new Map<string, number>();
+  const normalizedSelected = selectedCountry.toLowerCase();
+
+  for (const event of events) {
+    if ((event.country ?? '').toLowerCase() !== normalizedSelected) continue;
+    const city = event.city?.trim();
+    if (!city || city.toLowerCase() === 'latam') continue;
+    counts.set(city, (counts.get(city) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => {
+      if (a.count !== b.count) return b.count - a.count;
+      return a.value.localeCompare(b.value);
+    });
 }

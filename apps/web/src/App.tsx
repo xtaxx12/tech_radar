@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getChatResponse, getEventDetail, getProfileOptions, getRecommendations } from './api';
 import { ChatPanel } from './components/ChatPanel';
 import { EventCard } from './components/EventCard';
@@ -152,18 +152,6 @@ export default function App() {
   const hasFilters = Boolean(filters.source || filters.country || filters.city);
   const isEmpty = profileReady && !loadingProfile && allEvents.length === 0;
 
-  const availableCountries = useMemo(() => {
-    const pool = recommendations?.events ?? [];
-    const set = new Set<string>(pool.map((event) => event.country).filter(Boolean));
-    return [...set].sort();
-  }, [recommendations]);
-
-  const availableCities = useMemo(() => {
-    const pool = recommendations?.events ?? [];
-    const set = new Set<string>(pool.map((event) => event.city).filter(Boolean));
-    return [...set].sort();
-  }, [recommendations]);
-
   const openEventAndRemember = (eventId: string) => {
     scrollPositionsRef.current['/'] = window.scrollY;
     openEvent(eventId);
@@ -181,7 +169,11 @@ export default function App() {
     return <EventDetail event={selectedEvent} onBack={handleBackToRadar} />;
   }
 
-  const countriesCovered = availableCountries.length || 6;
+  const countriesCovered = new Set(
+    allEvents
+      .map((event) => event.country?.trim())
+      .filter((value): value is string => Boolean(value) && value.toLowerCase() !== 'latam')
+  ).size || 6;
   const listLimit = showAllEvents ? allEvents.length : 6;
   const listSlice = allEvents.slice(0, listLimit);
 
@@ -261,8 +253,8 @@ export default function App() {
               <FilterBar
                 filters={filters}
                 onChange={setFilters}
-                availableCountries={availableCountries}
-                availableCities={availableCities}
+                events={allEvents}
+                profileCountry={profile.country}
               />
             </section>
 

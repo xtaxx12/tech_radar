@@ -1,4 +1,3 @@
-import { eventbriteFallbackEvents } from '../data/fallback-events.js';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
@@ -36,8 +35,8 @@ export async function fetchEventbriteEvents(): Promise<SourceFetchResult> {
     if (mapped.length === 0) {
       return {
         source: 'eventbrite',
-        events: eventbriteFallbackEvents,
-        usedFallback: true,
+        events: [],
+        usedFallback: false,
         error: 'Eventbrite devolvio 0 eventos transformables desde la pagina publica'
       };
     }
@@ -50,8 +49,8 @@ export async function fetchEventbriteEvents(): Promise<SourceFetchResult> {
   } catch (error) {
     return {
       source: 'eventbrite',
-      events: eventbriteFallbackEvents,
-      usedFallback: true,
+      events: [],
+      usedFallback: false,
       error: error instanceof Error ? error.message : 'Error desconocido en Eventbrite'
     };
   }

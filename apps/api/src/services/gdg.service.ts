@@ -1,4 +1,3 @@
-import { gdgFallbackEvents } from '../data/fallback-events.js';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
@@ -34,29 +33,33 @@ export async function fetchGDGEvents(): Promise<SourceFetchResult> {
       }
     });
 
-    if (response.ok) {
-      const payload = (await response.json()) as unknown;
-      const candidateEvents = extractEvents(payload);
-      const mapped = candidateEvents.map((event) => mapGdgEvent(event)).filter(Boolean) as TechEvent[];
-
-      if (mapped.length > 0) {
-        return {
-          source: 'gdg',
-          events: mapped,
-          usedFallback: false
-        };
-      }
+    if (!response.ok) {
+      return {
+        source: 'gdg',
+        events: [],
+        usedFallback: false,
+        error: `GDG status ${response.status}`
+      };
     }
-  } catch {
-    // Fall through to structured fallback only if the live endpoint is unavailable.
-  }
 
-  return {
-    source: 'gdg',
-    events: gdgFallbackEvents,
-    usedFallback: true,
-    error: 'GDG sin API publica estable, se utilizo fallback estructurado'
-  };
+    const payload = (await response.json()) as unknown;
+    const candidateEvents = extractEvents(payload);
+    const mapped = candidateEvents.map((event) => mapGdgEvent(event)).filter(Boolean) as TechEvent[];
+
+    return {
+      source: 'gdg',
+      events: mapped,
+      usedFallback: false,
+      error: mapped.length === 0 ? 'GDG devolvio 0 eventos transformables' : undefined
+    };
+  } catch (error) {
+    return {
+      source: 'gdg',
+      events: [],
+      usedFallback: false,
+      error: error instanceof Error ? error.message : 'Error desconocido en GDG'
+    };
+  }
 }
 
 function extractEvents(payload: unknown): GdgApiEvent[] {
