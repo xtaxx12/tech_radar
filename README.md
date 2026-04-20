@@ -92,12 +92,18 @@ AUTH_COOKIE_SAMESITE=lax
 AUTH_COOKIE_SECURE=false
 AUTH_COOKIE_DOMAIN=
 
-# IA local opcional (Ollama)
+# NODE_ENV decide la preferencia automática de IA:
+#   - development → Ollama local primero, luego OpenAI → Gemini
+#   - production  → OpenAI → Gemini (Ollama local se omite; remoto queda como fallback)
+# Podés forzar manualmente con AI_PROVIDER=ollama|openai|gemini
+NODE_ENV=development
+
+# IA local (Ollama) — preferido en desarrollo si USE_OLLAMA=true
 USE_OLLAMA=false
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b-instruct
 
-# IA cloud opcional
+# IA cloud — preferidos en producción (se usan en orden y con fallback entre sí)
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 GEMINI_API_KEY=
