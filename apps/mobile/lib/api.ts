@@ -85,6 +85,18 @@ export function loginWithGoogle(credential: string): Promise<AuthResponse> {
   });
 }
 
+export function exchangeGoogleCode(
+  code: string,
+  codeVerifier: string,
+  redirectUri: string,
+  clientId?: string
+): Promise<AuthResponse> {
+  return request('/auth/google/exchange', {
+    method: 'POST',
+    body: JSON.stringify({ code, codeVerifier, redirectUri, clientId })
+  });
+}
+
 export function getMe(): Promise<{ user: PublicUser }> {
   return request('/auth/me');
 }

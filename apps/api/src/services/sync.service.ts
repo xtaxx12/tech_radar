@@ -1,3 +1,4 @@
+import { eventBus } from '../lib/event-bus.js';
 import { cleanEvents, dedupeEvents, enrichEventsWithAI } from '../lib/event-processing.js';
 import { eventRepository } from '../repositories/event.repository.js';
 import { fetchEventbriteEvents } from './eventbrite.service.js';
@@ -18,6 +19,9 @@ export async function syncEvents(): Promise<SyncResult> {
   try {
     const result = await runningSync;
     lastSyncResult = result;
+    if (result.saved > 0) {
+      eventBus.emitSyncCompleted(result);
+    }
     return result;
   } finally {
     runningSync = null;

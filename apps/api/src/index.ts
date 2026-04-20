@@ -12,6 +12,7 @@ import {
 	signSession,
 	verifyGoogleIdToken
 } from './lib/auth.js';
+import { eventBus } from './lib/event-bus.js';
 import { buildRecommendationContext, enrichEvent, filterByInterpretation, generateChatAnswer, parseChatInterpretation, rankEvents } from './lib/ranking.js';
 import { normalizeText } from './lib/text.js';
 import { optionalAuth, requireAuth } from './middleware/auth.middleware.js';
@@ -88,6 +89,7 @@ app.post('/auth/google/exchange', asyncHandler(async (request, response) => {
 	const code = typeof body.code === 'string' ? body.code : '';
 	const codeVerifier = typeof body.codeVerifier === 'string' ? body.codeVerifier : '';
 	const redirectUri = typeof body.redirectUri === 'string' ? body.redirectUri : '';
+	const clientId = typeof body.clientId === 'string' ? body.clientId : undefined;
 
 	if (!code || !codeVerifier || !redirectUri) {
 		response.status(400).json({ error: 'missing_params' });
@@ -96,9 +98,10 @@ app.post('/auth/google/exchange', asyncHandler(async (request, response) => {
 
 	let payload;
 	try {
-		payload = await exchangeGoogleCode({ code, codeVerifier, redirectUri });
+		payload = await exchangeGoogleCode({ code, codeVerifier, redirectUri, clientId });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'exchange falló';
+		console.error('[auth] exchange_failed:', message);
 		response.status(401).json({ error: 'exchange_failed', message });
 		return;
 	}
@@ -174,6 +177,44 @@ app.get('/events', asyncHandler(async (request, response) => {
 		total: ranked.length
 	});
 }));
+
+app.get('/events/stream', (request, response) => {
+	response.setHeader('Content-Type', 'text/event-stream');
+	response.setHeader('Cache-Control', 'no-cache, no-transform');
+	response.setHeader('Connection', 'keep-alive');
+	response.setHeader('X-Accel-Buffering', 'no');
+	response.flushHeaders();
+
+	const writeEvent = (name: string, payload: unknown) => {
+		response.write(`event: ${name}\n`);
+		response.write(`data: ${JSON.stringify(payload)}\n\n`);
+	};
+
+	writeEvent('hello', {
+		running: isSyncRunning(),
+		lastResult: getLastSyncResult()
+	});
+
+	const unsubscribe = eventBus.onSyncCompleted((result) => {
+		writeEvent('sync:completed', {
+			saved: result.saved,
+			finishedAt: result.finishedAt,
+			sources: result.sources
+		});
+	});
+
+	const heartbeat = setInterval(() => {
+		response.write(': keepalive\n\n');
+	}, 25_000);
+
+	const cleanup = () => {
+		clearInterval(heartbeat);
+		unsubscribe();
+	};
+
+	request.on('close', cleanup);
+	response.on('close', cleanup);
+});
 
 app.get('/events/recommended', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);

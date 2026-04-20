@@ -5,24 +5,23 @@
     "scheme": "techradar",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0b1020"
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.techradar.mobile"
+      "bundleIdentifier": "com.techradar.mobile",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.590581546649-mshegutfvl85pt67i9s8kgi6pt1e9qrp"
+            ]
+          }
+        ]
+      }
     },
     "android": {
-      "package": "com.techradar.mobile",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#0b1020"
-      }
+      "package": "com.techradar.mobile"
     },
     "web": {
       "bundler": "metro"

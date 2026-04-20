@@ -50,6 +50,41 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+    const source = new EventSource(`${base}/events/stream`, { withCredentials: true });
+
+    const onSync = (event: MessageEvent<string>) => {
+      try {
+        const payload = JSON.parse(event.data) as { saved?: number; finishedAt?: string };
+        setSyncStatus((current) => ({
+          running: false,
+          lastResult: payload.saved !== undefined
+            ? {
+                fetched: current?.lastResult?.fetched ?? payload.saved,
+                cleaned: current?.lastResult?.cleaned ?? payload.saved,
+                deduped: current?.lastResult?.deduped ?? payload.saved,
+                saved: payload.saved,
+                startedAt: current?.lastResult?.startedAt ?? payload.finishedAt ?? new Date().toISOString(),
+                finishedAt: payload.finishedAt ?? new Date().toISOString(),
+                sources: current?.lastResult?.sources ?? []
+              }
+            : current?.lastResult ?? null
+        }));
+        setReloadKey((key) => key + 1);
+      } catch {
+        // ignore malformed payloads
+      }
+    };
+
+    source.addEventListener('sync:completed', onSync as EventListener);
+
+    return () => {
+      source.removeEventListener('sync:completed', onSync as EventListener);
+      source.close();
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     let attempts = 0;
     const MAX_ATTEMPTS = 30;

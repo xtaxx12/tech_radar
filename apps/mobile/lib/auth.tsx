@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { getMe, loginWithGoogle, logout as apiLogout, registerTokenGetter } from './api';
 import { clearToken, loadToken, saveToken } from './storage';
-import type { PublicUser } from './types';
+import type { AuthResponse, PublicUser } from './types';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -9,6 +9,7 @@ type AuthContextValue = {
   status: AuthStatus;
   user: PublicUser | null;
   signInWithGoogleCredential: (credential: string) => Promise<PublicUser>;
+  applySession: (session: AuthResponse) => Promise<PublicUser>;
   signOut: () => Promise<void>;
 };
 
@@ -52,14 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogleCredential = useCallback(async (credential: string) => {
-    const { user: me, token } = await loginWithGoogle(credential);
-    tokenRef.current = token;
-    await saveToken(token);
-    setUser(me);
+  const applySession = useCallback(async (session: AuthResponse) => {
+    tokenRef.current = session.token;
+    await saveToken(session.token);
+    setUser(session.user);
     setStatus('authenticated');
-    return me;
+    return session.user;
   }, []);
+
+  const signInWithGoogleCredential = useCallback(
+    async (credential: string) => {
+      const session = await loginWithGoogle(credential);
+      return applySession(session);
+    },
+    [applySession]
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -74,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, signInWithGoogleCredential, signOut }),
-    [status, user, signInWithGoogleCredential, signOut]
+    () => ({ status, user, signInWithGoogleCredential, applySession, signOut }),
+    [status, user, signInWithGoogleCredential, applySession, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
