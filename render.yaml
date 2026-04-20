@@ -15,7 +15,12 @@ services:
     runtime: node
     plan: free
     region: oregon                       # cámbialo si querés más cerca de LATAM
-    buildCommand: npm install && npm run build --workspace apps/api
+    # `--include=dev` es crítico: el blueprint define NODE_ENV=production,
+    # y bajo esa condición `npm install` omite las devDependencies por
+    # defecto — incluido TypeScript, con lo cual `tsc -p tsconfig.json`
+    # del paso de build falla con "tsc: not found". Forzar --include=dev
+    # durante el build.
+    buildCommand: npm ci --include=dev && npm run build --workspace apps/api
     startCommand: npm run start --workspace apps/api
     healthCheckPath: /health
     autoDeploy: true

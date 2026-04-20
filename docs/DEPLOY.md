@@ -65,7 +65,9 @@ Si preferís no usar blueprint:
 - **Root Directory**: dejalo **vacío** (raíz del repo). Si ponés `apps/api`
   acá, `npm install` falla con *"No workspaces found"* porque el
   `package.json` raíz es donde viven los workspaces.
-- Build Command: `npm install && npm run build --workspace apps/api`
+- Build Command: `npm ci --include=dev && npm run build --workspace apps/api`
+  *(el `--include=dev` es obligatorio: con `NODE_ENV=production` en el servicio,
+  `npm install` omite devDependencies y `tsc` no queda disponible para el build)*.
 - Start Command: `npm run start --workspace apps/api`
 - Health Check Path: `/health`
 - Plan: Free
@@ -151,6 +153,7 @@ Para el demo del GDG Quito querés evitar ese cold start.
 | Primer request tarda ~40s | Render dormido + Neon suspendido | UptimeRobot cada 5 min lo evita. |
 | `ERROR: SSL connection is required` | `DATABASE_URL` sin `?sslmode=require` | Agregalo al connection string. |
 | Build falla con `No workspaces found: --workspace=apps/api` | Configuraste `rootDir: apps/api` (Render) o `Root Directory: apps/web` (Vercel) | Dejá Root Directory **vacío** en ambos. Los `render.yaml` y `vercel.json` del repo usan comandos con `--workspace` desde la raíz. |
+| Build falla con `sh: tsc: not found` o `Cannot find module 'drizzle-kit'` en Render | `NODE_ENV=production` hace que `npm install` salte devDependencies, y `tsc` está ahí | Build Command tiene que incluir `--include=dev`: `npm ci --include=dev && npm run build --workspace apps/api`. |
 | Chat responde con texto genérico | No hay `OPENAI_API_KEY` | En prod, Ollama se omite automáticamente; sin OpenAI/Gemini, cae al fallback heurístico. |
 | `/events` devuelve `[]` la primera vez | Sync aún corriendo en background | Esperá ~35s, la UI lo detecta vía SSE y refresca sola. |
 
