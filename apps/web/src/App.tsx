@@ -44,6 +44,7 @@ export default function App() {
   const [triggeringSync, setTriggeringSync] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [sseStatus, setSseStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting');
   const scrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -89,8 +90,33 @@ export default function App() {
 
     source.addEventListener('sync:completed', onSync as EventListener);
 
+    // onopen se dispara tanto en el primer connect como en cada reconexión
+    // automática del browser — perfecto para "limpiar" el chip de reconnecting.
+    source.onopen = () => {
+      setSseStatus('connected');
+      // Si el browser acaba de reconectar, pedimos un status fresco por si
+      // nos perdimos un 'sync:completed' durante el downtime.
+      void getSyncStatus().then((status) => {
+        setSyncStatus(status);
+        if ((status.lastResult?.saved ?? 0) > 0 && !status.running) {
+          setReloadKey((key) => key + 1);
+        }
+      }).catch(() => undefined);
+    };
+
+    source.onerror = () => {
+      // readyState 0=CONNECTING (browser ya está reintentando), 2=CLOSED (murió)
+      if (source.readyState === EventSource.CLOSED) {
+        setSseStatus('reconnecting');
+      } else if (source.readyState === EventSource.CONNECTING) {
+        setSseStatus('reconnecting');
+      }
+    };
+
     return () => {
       source.removeEventListener('sync:completed', onSync as EventListener);
+      source.onerror = null;
+      source.onopen = null;
       source.close();
     };
   }, []);
@@ -332,6 +358,12 @@ export default function App() {
           <p className="muted">Descubre eventos tecnológicos relevantes con IA y datos de Meetup, Eventbrite y GDG.</p>
         </div>
         <div className="topbar-actions">
+          {sseStatus === 'reconnecting' ? (
+            <div className="status-pill status-pill-warn" aria-live="polite" aria-label="Reconectando al stream en vivo">
+              <span className="status-dot" aria-hidden="true" />
+              Reconectando…
+            </div>
+          ) : null}
           <div
             className={`status-pill ${totalSources > 0 && healthySources === 0 ? 'status-pill-warn' : ''}`}
             aria-label="Estado de las fuentes de datos"

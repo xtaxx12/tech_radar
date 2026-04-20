@@ -120,6 +120,8 @@ Tech Radar LATAM:
 | **Fallback events removido** | Para presentar a la comunidad real, los datos tienen que ser reales. Si las fuentes fallan, el empty state explica por qué |
 | **Drizzle con pgEnum** para `source` y `level` | Integridad real a nivel DB, no solo a nivel aplicación |
 | **Rate limit in-memory** en `/chat` | Simple y sin deps extras. El trade-off: en deploy multi-instancia o tras un restart, las cuentas se pierden. Para escalar, mover a Redis/Upstash con la misma API (`createRateLimiter` ya es un factory) |
+| **`POST /sync` protegido** con auth o `SYNC_API_KEY` | El endpoint dispara scraping + IA (caro). En dev sin nada configurado queda abierto, pero apenas activás auth o seteás `SYNC_API_KEY` exige uno de los dos. Cron jobs pueden usar el header `X-API-Key`, usuarios humanos usan su sesión. |
+| **SSE con reconexión visible** | `EventSource` ya reconecta solo; agregamos `onerror`/`onopen` para mostrar un chip "Reconectando…" mientras está caída la conexión. El polling inicial de `/sync/status` mitiga el caso extremo de que SSE esté bloqueado por un proxy. |
 | **Trending calculado en runtime** (no batch) | Fresh signal: el evento que favoriteás ahora influye en el radar de los siguientes requests. El cost es una query agregada por hit a `/events` — barata porque `user_events` está indexada por `user_id` y es chica |
 
 ---

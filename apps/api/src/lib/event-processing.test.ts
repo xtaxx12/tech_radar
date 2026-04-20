@@ -103,4 +103,41 @@ describe('dedupeEvents', () => {
     ]);
     expect(out).toHaveLength(2);
   });
+
+  it('ignores case and accents when deduping titles', () => {
+    const out = dedupeEvents([
+      makeEvent({ id: 'a', title: 'Construye con IA' }),
+      makeEvent({ id: 'b', title: 'CONSTRUYE CON IA' }),
+      makeEvent({ id: 'c', title: 'Construye Con IÁ' })
+    ]);
+    expect(out).toHaveLength(1);
+  });
+
+  it('merges duplicates across sources keeping the richest payload', () => {
+    // Mismo evento listado en Meetup (poca info) y en GDG (rico).
+    const meetup = makeEvent({
+      id: 'meetup-123',
+      source: 'meetup',
+      title: 'Build with AI',
+      description: 'Short',
+      tags: ['ia']
+    });
+    const gdg = makeEvent({
+      id: 'gdg-456',
+      source: 'gdg',
+      title: 'Build with AI',
+      description: 'Full agenda with speakers, sponsors and hands-on codelabs',
+      tags: ['ia', 'gcp', 'flutter', 'cloud']
+    });
+
+    const out = dedupeEvents([meetup, gdg]);
+    expect(out).toHaveLength(1);
+    expect(out[0].source).toBe('gdg');
+    expect(out[0].tags.length).toBeGreaterThanOrEqual(meetup.tags.length);
+  });
+
+  it('returns the input unchanged when there is nothing to merge', () => {
+    const out = dedupeEvents([]);
+    expect(out).toEqual([]);
+  });
 });

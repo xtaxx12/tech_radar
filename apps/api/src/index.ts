@@ -17,6 +17,7 @@ import { buildRecommendationContext, enrichEvent, filterByInterpretation, genera
 import { normalizeText } from './lib/text.js';
 import { optionalAuth, requireAuth } from './middleware/auth.middleware.js';
 import { createRateLimiter } from './middleware/rate-limit.middleware.js';
+import { requireSyncAuth } from './middleware/sync-auth.middleware.js';
 import { eventRepository } from './repositories/event.repository.js';
 import { userEventRepository, type UserEventType } from './repositories/user-event.repository.js';
 import { userRepository } from './repositories/user.repository.js';
@@ -285,7 +286,7 @@ app.get('/events/:id', asyncHandler(async (request, response) => {
 	response.json({ event: enrichEvent(event, profile, trendingIds) });
 }));
 
-app.post('/sync', asyncHandler(async (_request, response) => {
+app.post('/sync', requireSyncAuth, asyncHandler(async (_request, response) => {
 	const result = await syncEvents();
 	response.json({ ok: true, result });
 }));

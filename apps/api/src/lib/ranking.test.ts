@@ -122,6 +122,18 @@ describe('enrichEvent', () => {
     const ranked = enrichEvent(event, baseProfile);
     expect(ranked.badges).toContain('Trending');
   });
+
+  it('clamps the score between 10 and 100 no matter how many bonuses stack', () => {
+    // Evento "perfecto" con todos los matches posibles; no debe pasar 100.
+    const perfect = makeEvent({ id: 'perfect', trending: true });
+    const ranked = enrichEvent(perfect, baseProfile, new Set(['perfect']));
+    expect(ranked.score).toBeLessThanOrEqual(100);
+    expect(ranked.score).toBeGreaterThan(85);
+  });
+
+  it('returns [] when rankEvents is called with no events', () => {
+    expect(rankEvents([], baseProfile, 5)).toEqual([]);
+  });
 });
 
 describe('rankEvents', () => {
