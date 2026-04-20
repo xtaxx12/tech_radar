@@ -1,0 +1,55 @@
+# Infra-as-code para Render — https://render.com/docs/blueprint-spec
+# Importalo una vez desde el dashboard de Render ("New → Blueprint") y crea
+# el servicio `tech-radar-api`. Las variables marcadas con `sync: false`
+# tenés que completarlas vos en el dashboard (Render no las guarda en git).
+
+services:
+  - type: web
+    name: tech-radar-api
+    runtime: node
+    plan: free
+    region: oregon                       # cámbialo si querés más cerca de LATAM
+    rootDir: apps/api
+    buildCommand: npm install --workspaces --include-workspace-root && npm run build --workspace apps/api
+    startCommand: npm run start --workspace apps/api
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: SYNC_INTERVAL_MINUTES
+        value: 60
+      # Cookie cross-site: web en Vercel (*.vercel.app) y api en Render (*.onrender.com)
+      - key: AUTH_COOKIE_SAMESITE
+        value: none
+      - key: AUTH_COOKIE_SECURE
+        value: true
+      # Dejar vacío: cookie host-only para el dominio de la API.
+      - key: AUTH_COOKIE_DOMAIN
+        value: ""
+      # Completar en el dashboard:
+      - key: CORS_ORIGIN           # ej. https://tech-radar-latam.vercel.app
+        sync: false
+      - key: DATABASE_URL          # Neon pooled connection string (?sslmode=require)
+        sync: false
+      - key: PG_SSL
+        value: true
+      - key: GOOGLE_CLIENT_ID      # OAuth 2.0 Web Client ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET  # solo si usás el flujo de exchange PKCE desde mobile
+        sync: false
+      - key: AUTH_SESSION_SECRET   # `openssl rand -base64 48`
+        generateValue: true
+      - key: SYNC_API_KEY          # para el ping keepalive + cron
+        generateValue: true
+      # IA cloud (Ollama se omite automáticamente en producción):
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
