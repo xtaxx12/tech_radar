@@ -6,6 +6,7 @@ import { closeDb } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import {
 	clearSessionCookie,
+	exchangeGoogleCode,
 	isAuthEnabled,
 	setSessionCookie,
 	signSession,
@@ -61,6 +62,44 @@ app.post('/auth/google', asyncHandler(async (request, response) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'token inválido';
 		response.status(401).json({ error: 'invalid_token', message });
+		return;
+	}
+
+	const user = await userRepository.upsertFromGoogle({
+		googleSub: payload.sub!,
+		email: payload.email!,
+		name: payload.name ?? null,
+		picture: payload.picture ?? null
+	});
+
+	const token = signSession({ userId: user.id });
+	setSessionCookie(response, token);
+
+	response.json({ user: toPublicUser(user), token });
+}));
+
+app.post('/auth/google/exchange', asyncHandler(async (request, response) => {
+	if (!isAuthEnabled()) {
+		response.status(503).json({ error: 'auth_disabled' });
+		return;
+	}
+
+	const body = request.body ?? {};
+	const code = typeof body.code === 'string' ? body.code : '';
+	const codeVerifier = typeof body.codeVerifier === 'string' ? body.codeVerifier : '';
+	const redirectUri = typeof body.redirectUri === 'string' ? body.redirectUri : '';
+
+	if (!code || !codeVerifier || !redirectUri) {
+		response.status(400).json({ error: 'missing_params' });
+		return;
+	}
+
+	let payload;
+	try {
+		payload = await exchangeGoogleCode({ code, codeVerifier, redirectUri });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'exchange falló';
+		response.status(401).json({ error: 'exchange_failed', message });
 		return;
 	}
 

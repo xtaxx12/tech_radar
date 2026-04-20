@@ -66,6 +66,49 @@ export async function verifyGoogleIdToken(idToken: string): Promise<TokenPayload
   return payload;
 }
 
+export async function exchangeGoogleCode(params: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}): Promise<TokenPayload> {
+  const config = getAuthConfig();
+  if (!config) {
+    throw new Error('Auth no está habilitado.');
+  }
+
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  if (!clientSecret) {
+    throw new Error('Falta GOOGLE_CLIENT_SECRET en el backend.');
+  }
+
+  const body = new URLSearchParams({
+    code: params.code,
+    client_id: config.clientId,
+    client_secret: clientSecret,
+    redirect_uri: params.redirectUri,
+    grant_type: 'authorization_code',
+    code_verifier: params.codeVerifier
+  });
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`Google rechazó el code exchange (${response.status}): ${errText}`);
+  }
+
+  const data = (await response.json()) as { id_token?: string; access_token?: string };
+  if (!data.id_token) {
+    throw new Error('Google no devolvió id_token en el intercambio.');
+  }
+
+  return verifyGoogleIdToken(data.id_token);
+}
+
 export type SessionPayload = {
   userId: string;
 };
