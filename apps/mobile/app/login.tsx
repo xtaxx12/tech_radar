@@ -1,129 +1,72 @@
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  statusCodes
+} from '@react-native-google-signin/google-signin';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { exchangeGoogleCode } from '../lib/api';
+import { loginWithGoogle } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { theme } from '../lib/theme';
 
-WebBrowser.maybeCompleteAuthSession();
-
 const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
-const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || undefined;
-const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || undefined;
-
-function reversedClientIdScheme(clientId: string | undefined): string | null {
-  if (!clientId) return null;
-  const base = clientId.replace(/\.apps\.googleusercontent\.com$/, '');
-  return `com.googleusercontent.apps.${base}`;
-}
-
-function buildIosRedirectUri(): string | undefined {
-  const scheme = reversedClientIdScheme(iosClientId);
-  return scheme ? `${scheme}:/oauthredirect` : undefined;
-}
+const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
 
 export default function Login() {
   const { applySession } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const consumedCode = useRef<string | null>(null);
-
-  const explicitRedirectUri = Platform.OS === 'ios' ? buildIosRedirectUri() : undefined;
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: webClientId,
-    iosClientId,
-    androidClientId,
-    scopes: ['openid', 'profile', 'email'],
-    redirectUri: explicitRedirectUri
-  });
+  const configured = useRef(false);
 
   useEffect(() => {
-    if (!request) return;
-    console.log('[login] authorize request', {
-      url: request.url,
-      redirectUri: request.redirectUri,
-      clientId: request.clientId,
-      codeChallenge: request.codeChallenge,
-      codeChallengeMethod: request.codeChallengeMethod,
-      codeVerifierPrefix: request.codeVerifier?.slice(0, 10),
-      codeVerifierLength: request.codeVerifier?.length,
-      responseType: request.responseType
-    });
-  }, [request]);
-
-  useEffect(() => {
-    if (!response) return;
-
-    if (response.type === 'cancel' || response.type === 'dismiss') {
-      setBusy(false);
-      return;
-    }
-
-    if (response.type === 'error') {
-      setError(response.error?.message ?? 'No pudimos completar el login con Google.');
-      setBusy(false);
-      return;
-    }
-
-    if (response.type !== 'success') {
-      setBusy(false);
-      return;
-    }
-
-    const code = response.params.code;
-    if (!code || consumedCode.current === code) {
-      // Guard: los authorization codes son single-use. Evitar que un re-render
-      // del effect intente intercambiar el mismo code dos veces.
-      return;
-    }
-    consumedCode.current = code;
-
-    const codeVerifier = request?.codeVerifier;
-    const redirectUri = request?.redirectUri ?? AuthSession.makeRedirectUri();
-    const clientIdUsed =
-      Platform.OS === 'ios'
-        ? iosClientId ?? webClientId
-        : Platform.OS === 'android'
-          ? androidClientId ?? webClientId
-          : webClientId;
-
-    if (!codeVerifier) {
-      setError('Google no devolvió los datos necesarios para completar el login.');
-      setBusy(false);
-      return;
-    }
-
-    (async () => {
-      try {
-        const session = await exchangeGoogleCode(code, codeVerifier, redirectUri, clientIdUsed);
-        await applySession(session);
-        router.replace('/(tabs)');
-      } catch (err) {
-        consumedCode.current = null;
-        const message = err instanceof Error ? err.message : 'Error al iniciar sesión.';
-        setError(message);
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }, [response, applySession]);
-
-  const handlePress = async () => {
+    if (configured.current) return;
     if (!webClientId) {
       setError('Falta EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB en .env.');
       return;
     }
+    GoogleSignin.configure({
+      webClientId,
+      iosClientId,
+      scopes: ['openid', 'profile', 'email']
+    });
+    configured.current = true;
+  }, []);
+
+  const handlePress = async () => {
+    if (!configured.current) return;
     setError(null);
     setBusy(true);
+
     try {
-      await promptAsync();
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await GoogleSignin.signIn();
+      const idToken = result.data?.idToken ?? null;
+
+      if (!idToken) {
+        throw new Error('Google no devolvió idToken.');
+      }
+
+      const session = await loginWithGoogle(idToken);
+      await applySession(session);
+      router.replace('/(tabs)');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al abrir Google.';
+      if (isErrorWithCode(err)) {
+        if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+          setBusy(false);
+          return;
+        }
+        if (err.code === statusCodes.IN_PROGRESS) {
+          return;
+        }
+        if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          setError('Google Play Services no está disponible.');
+          setBusy(false);
+          return;
+        }
+      }
+      const message = err instanceof Error ? err.message : 'Error al iniciar sesión.';
       setError(message);
       setBusy(false);
     }

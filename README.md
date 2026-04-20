@@ -60,12 +60,12 @@ MEETUP_API_KEY=
 EVENTBRITE_API_KEY=
 
 # PostgreSQL
-# Formato: postgres://usuario:password@host:puerto/base
-# Ejemplos:
-#   Local:       postgres://postgres:postgres@localhost:5434/tech_radar_latam
-#   Neon:        postgres://user:pass@ep-xxx.neon.tech/tech_radar_latam?sslmode=require
-#   Supabase:    postgres://postgres.xxx:pass@aws-0-xxx.pooler.supabase.com:6543/postgres
-#   Railway:     postgres://postgres:pass@containers-us-xxx.railway.app:6543/railway
+# Formato: postgres://<USER>:<PASSWORD>@<HOST>:<PORT>/<DB>
+# Ejemplos (sustituye los placeholders por tus credenciales reales):
+#   Docker local (matchea docker-compose.yml): postgres://<USER>:<PASSWORD>@localhost:5434/tech_radar_latam
+#   Neon:     postgres://<USER>:<PASSWORD>@ep-xxx.neon.tech/tech_radar_latam?sslmode=require
+#   Supabase: postgres://<USER>:<PASSWORD>@aws-0-xxx.pooler.supabase.com:6543/postgres
+#   Railway:  postgres://<USER>:<PASSWORD>@containers-us-xxx.railway.app:6543/railway
 DATABASE_URL=
 # Pool: ajusta si tu plan tiene pocos slots (ej. Supabase free = 15)
 PG_POOL_MAX=10
