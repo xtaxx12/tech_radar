@@ -34,6 +34,7 @@ export default function App() {
   const [chatMessage, setChatMessage] = useState('Eventos de IA esta semana en Ecuador para junior');
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [chatRateLimit, setChatRateLimit] = useState<{ scope: 'per_second' | 'per_hour'; message: string } | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
   const [profileReady, setProfileReady] = useState(Boolean(localStorage.getItem('techRadarProfile')));
@@ -242,11 +243,16 @@ export default function App() {
   const handleChatSubmit = () => {
     setLoadingChat(true);
     setChatError(null);
+    setChatRateLimit(null);
     getChatResponse(chatMessage, profile)
       .then((data) => setChatResponse(data))
       .catch((error: unknown) => {
         if (error instanceof ApiError && error.status === 401) {
           setChatError('Inicia sesión con Google para usar el chat IA.');
+        } else if (error instanceof ApiError && error.status === 429) {
+          const rawScope = error.details?.scope;
+          const scope: 'per_second' | 'per_hour' = rawScope === 'per_hour' ? 'per_hour' : 'per_second';
+          setChatRateLimit({ scope, message: error.message });
         } else {
           const message = error instanceof Error ? error.message : 'Ocurrió un error consultando la IA.';
           setChatError(message);
@@ -519,6 +525,7 @@ export default function App() {
               loading={loadingChat}
               response={chatResponse}
               error={chatError}
+              rateLimit={chatRateLimit}
               onOpenEvent={openEventAndRemember}
               loginRequired={chatLoginRequired}
             />

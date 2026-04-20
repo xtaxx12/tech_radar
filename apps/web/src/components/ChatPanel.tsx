@@ -2,6 +2,11 @@ import { GoogleSignIn } from '../auth/GoogleSignIn';
 import type { ChatResponse, UserProfile } from '../types';
 import { EventCard } from './EventCard';
 
+type RateLimitState = {
+  scope: 'per_second' | 'per_hour';
+  message: string;
+};
+
 type Props = {
   profile: UserProfile;
   message: string;
@@ -10,6 +15,7 @@ type Props = {
   loading: boolean;
   response: ChatResponse | null;
   error: string | null;
+  rateLimit?: RateLimitState | null;
   onOpenEvent: (eventId: string) => void;
   loginRequired?: boolean;
 };
@@ -20,7 +26,18 @@ const promptShortcuts = [
   'Eventos de data en Perú este mes'
 ];
 
-export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading, response, error, onOpenEvent, loginRequired = false }: Props) {
+export function ChatPanel({
+  profile,
+  message,
+  onMessageChange,
+  onSubmit,
+  loading,
+  response,
+  error,
+  rateLimit,
+  onOpenEvent,
+  loginRequired = false
+}: Props) {
   const placeholder = `Ejemplo: Eventos de IA esta semana en ${profile.country} para ${profile.level}`;
 
   if (loginRequired) {
@@ -77,7 +94,23 @@ export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading
         </button>
       </div>
 
-      {error ? (
+      {rateLimit ? (
+        <div
+          className={`chat-rate-limit chat-rate-limit-${rateLimit.scope}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="chat-rate-limit-icon" aria-hidden="true">⏱</span>
+          <div className="chat-rate-limit-copy">
+            <strong>
+              {rateLimit.scope === 'per_second' ? 'Demasiado rápido' : 'Límite por hora alcanzado'}
+            </strong>
+            <span>{rateLimit.message}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {error && !rateLimit ? (
         <div className="chat-error" role="alert">
           <strong>No pudimos consultar la IA.</strong>
           <span>{error}</span>
@@ -99,7 +132,7 @@ export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading
             ))}
           </div>
         </div>
-      ) : !error ? (
+      ) : !error && !rateLimit ? (
         <div className="chat-empty">Tu consulta aparecerá aquí con eventos filtrados y una explicación automática.</div>
       ) : null}
     </section>

@@ -17,11 +17,13 @@ const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 export class ApiError extends Error {
   status: number;
   code?: string;
+  details?: Record<string, unknown>;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -38,19 +40,23 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let message = `Request failed: ${response.status}`;
     let code: string | undefined;
+    let details: Record<string, unknown> | undefined;
     try {
       const text = await response.text();
       try {
-        const parsed = JSON.parse(text) as { error?: string; message?: string };
-        code = parsed.error;
-        message = parsed.message ?? parsed.error ?? text ?? message;
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        details = parsed;
+        const parsedError = typeof parsed.error === 'string' ? parsed.error : undefined;
+        const parsedMessage = typeof parsed.message === 'string' ? parsed.message : undefined;
+        code = parsedError;
+        message = parsedMessage ?? parsedError ?? text ?? message;
       } catch {
         message = text || message;
       }
     } catch {
       // ignore
     }
-    throw new ApiError(response.status, message, code);
+    throw new ApiError(response.status, message, code, details);
   }
 
   return response.json() as Promise<T>;
