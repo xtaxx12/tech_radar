@@ -47,14 +47,23 @@ const COUNTRY_KEYWORDS: Array<[string, string]> = [
   ['panama', 'Panamá']
 ];
 
-export function rankEvents(events: TechEvent[], profile: UserProfile, limit = 6): RankedEvent[] {
+export function rankEvents(
+  events: TechEvent[],
+  profile: UserProfile,
+  limit = 6,
+  trendingIds: ReadonlySet<string> = new Set()
+): RankedEvent[] {
   return [...events]
-    .map((event) => enrichEvent(event, profile))
+    .map((event) => enrichEvent(event, profile, trendingIds))
     .sort((left, right) => right.score - left.score)
     .slice(0, limit);
 }
 
-export function enrichEvent(event: TechEvent, profile: UserProfile): RankedEvent {
+export function enrichEvent(
+  event: TechEvent,
+  profile: UserProfile,
+  trendingIds: ReadonlySet<string> = new Set()
+): RankedEvent {
   const reasons: string[] = [];
   let score = 35;
 
@@ -101,13 +110,21 @@ export function enrichEvent(event: TechEvent, profile: UserProfile): RankedEvent
     reasons.push(`Ya sucedió hace ${Math.abs(dateDistance)} días; queda como referencia al final del radar.`);
   }
 
-  if (event.trending || event.source === 'gdg') {
+  // "Trending" es la señal combinada de: (a) marca explícita del fetcher o
+  // (b) actividad reciente de la comunidad (favoritos + RSVPs) medida en
+  // la API antes de llamar a rankEvents. Así el ranking reacciona a lo
+  // que la gente está guardando en serio, no a una bandera estática.
+  const isTrending = event.trending === true || trendingIds.has(event.id);
+  if (isTrending) {
+    score += 10;
+    reasons.push('La comunidad lo está marcando como favorito o confirmando asistencia.');
+  } else if (event.source === 'gdg') {
     score += 6;
   }
 
   score = Math.max(10, Math.min(100, score));
 
-  const badges = buildBadges(score, event);
+  const badges = buildBadges(score, event, isTrending);
   const summary = buildSummary(event);
 
   return {
@@ -120,12 +137,14 @@ export function enrichEvent(event: TechEvent, profile: UserProfile): RankedEvent
   };
 }
 
-function buildBadges(score: number, event: TechEvent): string[] {
+function buildBadges(score: number, event: TechEvent, isTrending: boolean): string[] {
   const badges = [];
 
   if (score >= 85) {
     badges.push('Para ti');
-  } else if (score >= 65) {
+  }
+
+  if (isTrending) {
     badges.push('Trending');
   }
 

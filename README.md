@@ -172,6 +172,12 @@ npm run build
 npm run start
 ```
 
+## Desplegar a producción (Neon + Render + Vercel)
+
+Guía paso a paso en **[docs/DEPLOY.md](docs/DEPLOY.md)** — incluye
+`render.yaml` listo, `vercel.json` listo, checklist ordenado, troubleshooting
+y estimación de costos ($0–2/mes).
+
 ## Qué incluye
 
 - Integración real con Eventbrite API (si hay `EVENTBRITE_API_KEY`)

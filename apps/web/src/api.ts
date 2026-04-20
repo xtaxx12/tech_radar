@@ -70,6 +70,7 @@ export type EventQueryFilters = {
   source?: string;
   country?: string;
   city?: string;
+  q?: string;
 };
 
 export function getRecommendations(profile: UserProfile, filters: EventQueryFilters = {}): Promise<RecommendationsResponse> {
@@ -83,6 +84,7 @@ export function getRecommendations(profile: UserProfile, filters: EventQueryFilt
   if (filters.source) query.set('source', filters.source);
   if (filters.country) query.set('countryFilter', filters.country);
   if (filters.city) query.set('city', filters.city);
+  if (filters.q?.trim()) query.set('q', filters.q.trim());
 
   return requestJson<RecommendationsResponse>(`/events?${query.toString()}`);
 }

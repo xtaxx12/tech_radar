@@ -93,6 +93,47 @@ describe('enrichEvent', () => {
     const ranked = enrichEvent(pastTwoWeeks, baseProfile);
     expect(ranked.reasons.join(' ')).not.toMatch(/Está cerca en el calendario/);
   });
+
+  it('lifts score and adds "Trending" badge when the event id is in the dynamic trending set', () => {
+    // Evento deliberadamente flojo en matches (otro país, tags sin overlap)
+    // para dejar headroom de score antes del clamp de 100.
+    const event = makeEvent({
+      id: 'hot-one',
+      trending: false,
+      source: 'meetup',
+      country: 'México',
+      tags: ['backend'],
+      level: 'senior'
+    });
+    const trendingIds = new Set<string>(['hot-one']);
+
+    const withoutTrending = enrichEvent(event, baseProfile);
+    const withTrending = enrichEvent(event, baseProfile, trendingIds);
+
+    expect(withTrending.score).toBeGreaterThan(withoutTrending.score);
+    expect(withTrending.badges).toContain('Trending');
+    expect(withTrending.reasons.join(' ')).toMatch(/comunidad/i);
+    // El evento que no es trending no recibe la razón ni el badge.
+    expect(withoutTrending.badges).not.toContain('Trending');
+  });
+
+  it('still honors the hard-coded event.trending flag (backwards compatible)', () => {
+    const event = makeEvent({ id: 'legacy-trending', trending: true, source: 'meetup' });
+    const ranked = enrichEvent(event, baseProfile);
+    expect(ranked.badges).toContain('Trending');
+  });
+
+  it('clamps the score between 10 and 100 no matter how many bonuses stack', () => {
+    // Evento "perfecto" con todos los matches posibles; no debe pasar 100.
+    const perfect = makeEvent({ id: 'perfect', trending: true });
+    const ranked = enrichEvent(perfect, baseProfile, new Set(['perfect']));
+    expect(ranked.score).toBeLessThanOrEqual(100);
+    expect(ranked.score).toBeGreaterThan(85);
+  });
+
+  it('returns [] when rankEvents is called with no events', () => {
+    expect(rankEvents([], baseProfile, 5)).toEqual([]);
+  });
 });
 
 describe('rankEvents', () => {

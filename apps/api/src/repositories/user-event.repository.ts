@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { userEvents, type UserEventRow } from '../db/schema.js';
 
@@ -46,6 +46,32 @@ class UserEventRepository {
     await db
       .delete(userEvents)
       .where(and(eq(userEvents.userId, userId), eq(userEvents.eventId, eventId), eq(userEvents.type, type)));
+  }
+
+  /**
+   * Cuenta interacciones (favoritos + RSVPs) por evento desde una fecha.
+   * Si no hay DB configurada (modo memoria) devuelve un Map vacío —
+   * el ranking pierde el boost de trending pero sigue funcionando.
+   */
+  async countInteractionsByEvent(sinceIso: string): Promise<Map<string, number>> {
+    const db = getDb();
+    if (!db) return new Map();
+
+    const rows = await db
+      .select({
+        eventId: userEvents.eventId,
+        total: sql<number>`count(*)`.as('total')
+      })
+      .from(userEvents)
+      .where(gte(userEvents.createdAt, sinceIso))
+      .groupBy(userEvents.eventId);
+
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const total = typeof row.total === 'number' ? row.total : Number(row.total);
+      if (Number.isFinite(total)) counts.set(row.eventId, total);
+    }
+    return counts;
   }
 }
 
