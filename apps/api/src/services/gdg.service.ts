@@ -32,7 +32,7 @@ type GdgApiEvent = {
 
 const GDG_EVENT_ENDPOINT = 'https://gdg.community.dev/api/event/';
 const PAGE_SIZE = 500;
-const MAX_PAGES = 4;
+const MAX_PAGES = 2;
 
 const LATAM_CODES: Record<string, string> = {
   AR: 'Argentina',

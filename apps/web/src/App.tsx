@@ -44,6 +44,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!syncStatus?.running) {
+      return;
+    }
+
+    let active = true;
+    let lastRunning = true;
+
+    const timer = setInterval(() => {
+      void getSyncStatus()
+        .then((status) => {
+          if (!active) return;
+          setSyncStatus(status);
+          if (lastRunning && !status.running && profileReady) {
+            getRecommendations(profile, filters)
+              .then((data) => { if (active) setRecommendations(data); })
+              .catch(() => undefined);
+          }
+          lastRunning = status.running;
+        })
+        .catch(() => undefined);
+    }, 3000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [syncStatus?.running, profileReady, profile, filters]);
+
+  useEffect(() => {
     const onPopState = () => setRoutePath(window.location.pathname);
     window.addEventListener('popstate', onPopState);
 
@@ -290,19 +319,35 @@ export default function App() {
             </section>
 
             {showSkeleton ? (
-              <EventCardSkeletonGrid count={4} />
+              <div className="skeleton-wrapper">
+                {syncStatus?.running ? (
+                  <div className="sync-banner" role="status">
+                    <span className="sync-banner-dot" aria-hidden="true" />
+                    Sincronizando fuentes reales (Meetup, Eventbrite, GDG)…
+                  </div>
+                ) : null}
+                <EventCardSkeletonGrid count={4} />
+              </div>
             ) : isEmpty ? (
               <EventsEmptyState
-                title={hasFilters ? 'Sin eventos con esos filtros' : 'Todavía no hay eventos en tu radar'}
+                title={
+                  hasFilters
+                    ? 'Sin eventos con esos filtros'
+                    : syncStatus?.running
+                      ? 'Sincronizando fuentes reales…'
+                      : 'Todavía no hay eventos en tu radar'
+                }
                 description={
                   hasFilters
                     ? 'Intenta limpiar los filtros o ampliar tu búsqueda a otra ciudad o fuente.'
-                    : 'Las fuentes públicas (Meetup, Eventbrite, GDG) no devolvieron eventos transformables. Reintenta la sincronización o revisa el detalle debajo.'
+                    : syncStatus?.running
+                      ? 'Estamos consultando Meetup, Eventbrite y GDG en vivo. En unos segundos aparecerán los eventos.'
+                      : 'Las fuentes públicas (Meetup, Eventbrite, GDG) no devolvieron eventos transformables. Reintenta la sincronización o revisa el detalle debajo.'
                 }
                 onReset={hasFilters ? () => setFilters(emptyFilters) : undefined}
                 syncStatus={hasFilters ? null : syncStatus?.lastResult ?? null}
                 syncRunning={triggeringSync || Boolean(syncStatus?.running)}
-                onRetrySync={hasFilters ? undefined : handleRetrySync}
+                onRetrySync={hasFilters || syncStatus?.running ? undefined : handleRetrySync}
               />
             ) : (
               <section className="events-grid" aria-busy={loadingProfile}>

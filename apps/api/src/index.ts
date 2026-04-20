@@ -197,13 +197,21 @@ function normalizeInterests(value: unknown): string[] {
 }
 
 async function ensureEventsLoaded(): Promise<TechEvent[]> {
-	let events = await eventRepository.getAll();
+	const events = await eventRepository.getAll();
 	if (events.length > 0) {
 		return events;
 	}
 
-	await syncEvents();
-	events = await eventRepository.getAll();
+	// If a sync is already running (bootstrap or periodic), don't block the
+	// request on it — return empty so the UI can poll /sync/status and refetch.
+	if (isSyncRunning()) {
+		return events;
+	}
+
+	// Kick off sync in the background and return immediately.
+	syncEvents().catch((error) => {
+		console.error('[api] lazy sync failed:', error instanceof Error ? error.message : error);
+	});
 	return events;
 }
 

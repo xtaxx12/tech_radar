@@ -872,6 +872,35 @@ a:focus-visible {
   margin-top: var(--space-2);
 }
 
+.skeleton-wrapper {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sync-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 999px;
+  background: rgba(113, 227, 199, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(113, 227, 199, 0.28);
+  font-size: 0.88rem;
+  font-weight: 600;
+  width: fit-content;
+  animation: slideUp 220ms var(--ease-out) both;
+}
+
+.sync-banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(113, 227, 199, 0.22);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
 .event-card-skeleton {
   pointer-events: none;
   gap: var(--space-3);
