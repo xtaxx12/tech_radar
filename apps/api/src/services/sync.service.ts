@@ -1,3 +1,4 @@
+import { eventBus } from '../lib/event-bus.js';
 import { cleanEvents, dedupeEvents, enrichEventsWithAI } from '../lib/event-processing.js';
 import { eventRepository } from '../repositories/event.repository.js';
 import { fetchEventbriteEvents } from './eventbrite.service.js';
@@ -6,6 +7,7 @@ import { fetchMeetupEvents } from './meetup.service.js';
 import type { SyncResult } from '../types.js';
 
 let runningSync: Promise<SyncResult> | null = null;
+let lastSyncResult: SyncResult | null = null;
 
 export async function syncEvents(): Promise<SyncResult> {
   if (runningSync) {
@@ -15,10 +17,23 @@ export async function syncEvents(): Promise<SyncResult> {
   runningSync = executeSync();
 
   try {
-    return await runningSync;
+    const result = await runningSync;
+    lastSyncResult = result;
+    if (result.saved > 0) {
+      eventBus.emitSyncCompleted(result);
+    }
+    return result;
   } finally {
     runningSync = null;
   }
+}
+
+export function getLastSyncResult(): SyncResult | null {
+  return lastSyncResult;
+}
+
+export function isSyncRunning(): boolean {
+  return runningSync !== null;
 }
 
 async function executeSync(): Promise<SyncResult> {

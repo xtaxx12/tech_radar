@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tech-radar-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tech_radar_latam
+    ports:
+      # El host expone 5434 para evitar colisión con un Postgres local ya
+      # instalado (Homebrew, Postgres.app). Dentro del contenedor sigue en 5432.
+      - "5434:5432"
+    volumes:
+      - tech-radar-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tech_radar_latam"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  tech-radar-pg-data:

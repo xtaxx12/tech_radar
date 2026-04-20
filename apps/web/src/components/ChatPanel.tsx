@@ -1,3 +1,4 @@
+import { GoogleSignIn } from '../auth/GoogleSignIn';
 import type { ChatResponse, UserProfile } from '../types';
 import { EventCard } from './EventCard';
 
@@ -10,6 +11,7 @@ type Props = {
   response: ChatResponse | null;
   error: string | null;
   onOpenEvent: (eventId: string) => void;
+  loginRequired?: boolean;
 };
 
 const promptShortcuts = [
@@ -18,8 +20,23 @@ const promptShortcuts = [
   'Eventos de data en Perú este mes'
 ];
 
-export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading, response, error, onOpenEvent }: Props) {
+export function ChatPanel({ profile, message, onMessageChange, onSubmit, loading, response, error, onOpenEvent, loginRequired = false }: Props) {
   const placeholder = `Ejemplo: Eventos de IA esta semana en ${profile.country} para ${profile.level}`;
+
+  if (loginRequired) {
+    return (
+      <section className="panel chat-panel chat-panel-gated" aria-label="Chat IA (requiere iniciar sesión)">
+        <div className="eyebrow">Chat IA</div>
+        <h2>Inicia sesión para chatear con la IA.</h2>
+        <p className="muted">
+          Limitamos el chat a usuarios autenticados para controlar los costos del modelo. El resto del radar sigue público.
+        </p>
+        <div className="chat-gate-signin">
+          <GoogleSignIn />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel chat-panel" aria-label="Chat IA de recomendación de eventos">

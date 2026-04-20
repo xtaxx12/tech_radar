@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { getChatResponse, getEventDetail, getProfileOptions, getRecommendations } from './api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, getChatResponse, getEventDetail, getProfileOptions, getRecommendations, getSyncStatus, triggerSync } from './api';
+import { useAuth } from './auth/AuthContext';
+import { GoogleSignIn } from './auth/GoogleSignIn';
+import { UserMenu } from './auth/UserMenu';
 import { ChatPanel } from './components/ChatPanel';
 import { EventCard } from './components/EventCard';
 import { EventCardSkeletonGrid } from './components/EventCardSkeleton';
@@ -7,7 +10,7 @@ import { EventDetail } from './components/EventDetail';
 import { EventsEmptyState } from './components/EventsEmptyState';
 import { FilterBar, type EventFilters } from './components/FilterBar';
 import { ProfileForm } from './components/ProfileForm';
-import type { ChatResponse, ProfileOptions, RankedEvent, RecommendationsResponse, UserProfile } from './types';
+import type { ChatResponse, ProfileOptions, RankedEvent, RecommendationsResponse, SyncStatus, UserProfile } from './types';
 
 const defaultProfile: UserProfile = {
   country: 'Ecuador',
@@ -19,7 +22,9 @@ const defaultProfile: UserProfile = {
 const emptyFilters: EventFilters = { source: '', country: '', city: '' };
 
 export default function App() {
+  const { user, favorites, rsvp, config: authConfig, toggleFavorite, toggleRsvp } = useAuth();
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
+  const [savedProfile, setSavedProfile] = useState<UserProfile>(loadProfile);
   const [options, setOptions] = useState<ProfileOptions | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<RankedEvent | null>(null);
@@ -34,10 +39,86 @@ export default function App() {
   const [profileReady, setProfileReady] = useState(Boolean(localStorage.getItem('techRadarProfile')));
   const [filters, setFilters] = useState<EventFilters>(emptyFilters);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [triggeringSync, setTriggeringSync] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const scrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     void getProfileOptions().then(setOptions).catch(() => setOptions(null));
+    void getSyncStatus().then(setSyncStatus).catch(() => setSyncStatus(null));
+  }, []);
+
+  useEffect(() => {
+    const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+    const source = new EventSource(`${base}/events/stream`, { withCredentials: true });
+
+    const onSync = (event: MessageEvent<string>) => {
+      try {
+        const payload = JSON.parse(event.data) as { saved?: number; finishedAt?: string };
+        setSyncStatus((current) => ({
+          running: false,
+          lastResult: payload.saved !== undefined
+            ? {
+                fetched: current?.lastResult?.fetched ?? payload.saved,
+                cleaned: current?.lastResult?.cleaned ?? payload.saved,
+                deduped: current?.lastResult?.deduped ?? payload.saved,
+                saved: payload.saved,
+                startedAt: current?.lastResult?.startedAt ?? payload.finishedAt ?? new Date().toISOString(),
+                finishedAt: payload.finishedAt ?? new Date().toISOString(),
+                sources: current?.lastResult?.sources ?? []
+              }
+            : current?.lastResult ?? null
+        }));
+        setReloadKey((key) => key + 1);
+      } catch {
+        // ignore malformed payloads
+      }
+    };
+
+    source.addEventListener('sync:completed', onSync as EventListener);
+
+    return () => {
+      source.removeEventListener('sync:completed', onSync as EventListener);
+      source.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30;
+
+    const timer = setInterval(() => {
+      if (!active) return;
+      attempts += 1;
+      if (attempts > MAX_ATTEMPTS) {
+        clearInterval(timer);
+        return;
+      }
+
+      void getSyncStatus()
+        .then((status) => {
+          if (!active) return;
+          setSyncStatus(status);
+
+          const settled = !status.running && status.lastResult !== null;
+          const hasData = (status.lastResult?.saved ?? 0) > 0;
+
+          if (settled && hasData) {
+            setReloadKey((key) => key + 1);
+            clearInterval(timer);
+          } else if (settled && !hasData) {
+            clearInterval(timer);
+          }
+        })
+        .catch(() => undefined);
+    }, 3000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -125,10 +206,37 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [profile, profileReady, filters]);
+  }, [profile, profileReady, filters, reloadKey]);
 
   const saveProfile = () => {
+    setSavedProfile(profile);
     setProfileReady(true);
+  };
+
+  const cancelEdit = () => {
+    setProfile(savedProfile);
+    setProfileReady(true);
+  };
+
+  const openEditor = () => {
+    setSavedProfile(profile);
+    setProfileReady(false);
+  };
+
+  const profileHasChanges = !sameProfile(profile, savedProfile);
+
+  const handleRetrySync = () => {
+    setTriggeringSync(true);
+    setSyncStatus((current) => (current ? { ...current, running: true } : { running: true, lastResult: null }));
+    triggerSync()
+      .then((data) => {
+        setSyncStatus({ running: false, lastResult: data.result });
+        setReloadKey((key) => key + 1);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setTriggeringSync(false);
+      });
   };
 
   const handleChatSubmit = () => {
@@ -137,12 +245,18 @@ export default function App() {
     getChatResponse(chatMessage, profile)
       .then((data) => setChatResponse(data))
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Ocurrió un error consultando la IA.';
-        setChatError(message);
+        if (error instanceof ApiError && error.status === 401) {
+          setChatError('Inicia sesión con Google para usar el chat IA.');
+        } else {
+          const message = error instanceof Error ? error.message : 'Ocurrió un error consultando la IA.';
+          setChatError(message);
+        }
         setChatResponse(null);
       })
       .finally(() => setLoadingChat(false));
   };
+
+  const chatLoginRequired = Boolean(authConfig?.enabled) && !user;
 
   const topEvents = recommendations?.recommendations ?? [];
   const allEvents = recommendations?.events ?? [];
@@ -150,19 +264,10 @@ export default function App() {
   const trendingCount = recommendations?.context.trending ?? 0;
   const isEventRoute = routePath.startsWith('/events/');
   const hasFilters = Boolean(filters.source || filters.country || filters.city);
-  const isEmpty = profileReady && !loadingProfile && allEvents.length === 0;
-
-  const availableCountries = useMemo(() => {
-    const pool = recommendations?.events ?? [];
-    const set = new Set<string>(pool.map((event) => event.country).filter(Boolean));
-    return [...set].sort();
-  }, [recommendations]);
-
-  const availableCities = useMemo(() => {
-    const pool = recommendations?.events ?? [];
-    const set = new Set<string>(pool.map((event) => event.city).filter(Boolean));
-    return [...set].sort();
-  }, [recommendations]);
+  const showSkeleton = loadingProfile && recommendations === null;
+  const isEmpty = profileReady && !showSkeleton && allEvents.length === 0;
+  const healthySources = syncStatus?.lastResult?.sources.filter((source) => source.count > 0 && !source.error).length ?? 0;
+  const totalSources = syncStatus?.lastResult?.sources.length ?? 0;
 
   const openEventAndRemember = (eventId: string) => {
     scrollPositionsRef.current['/'] = window.scrollY;
@@ -178,10 +283,25 @@ export default function App() {
   }
 
   if (selectedEvent) {
-    return <EventDetail event={selectedEvent} onBack={handleBackToRadar} />;
+    return (
+      <EventDetail
+        event={selectedEvent}
+        onBack={handleBackToRadar}
+        isFavorite={favorites.has(selectedEvent.id)}
+        isGoing={rsvp.has(selectedEvent.id)}
+        canInteract={Boolean(user)}
+        authEnabled={Boolean(authConfig?.enabled)}
+        onToggleFavorite={user ? () => void toggleFavorite(selectedEvent.id) : undefined}
+        onToggleRsvp={user ? () => void toggleRsvp(selectedEvent.id) : undefined}
+      />
+    );
   }
 
-  const countriesCovered = availableCountries.length || 6;
+  const countriesCovered = new Set(
+    allEvents
+      .map((event) => event.country?.trim())
+      .filter((value): value is string => Boolean(value) && value.toLowerCase() !== 'latam')
+  ).size || 6;
   const listLimit = showAllEvents ? allEvents.length : 6;
   const listSlice = allEvents.slice(0, listLimit);
 
@@ -195,36 +315,71 @@ export default function App() {
           <div className="brand">Tech Radar LATAM</div>
           <p className="muted">Descubre eventos tecnológicos relevantes con IA y datos de Meetup, Eventbrite y GDG.</p>
         </div>
-        <div className="status-pill" aria-label="Estado de la API">
-          <span className="status-dot" aria-hidden="true" />
-          API + IA fallback local
+        <div className="topbar-actions">
+          <div
+            className={`status-pill ${totalSources > 0 && healthySources === 0 ? 'status-pill-warn' : ''}`}
+            aria-label="Estado de las fuentes de datos"
+          >
+            <span className="status-dot" aria-hidden="true" />
+            {totalSources > 0
+              ? `${healthySources}/${totalSources} fuentes activas`
+              : 'Conectando fuentes…'}
+          </div>
+          {authConfig?.enabled ? (user ? <UserMenu /> : <GoogleSignIn compact />) : null}
         </div>
       </header>
 
       {!profileReady ? (
-        <main className="hero-grid">
-          <section className="hero-copy panel">
-            <div className="eyebrow">LATAM events intelligence</div>
-            <h1>Un radar de eventos tech que entiende tu perfil y te explica el porqué.</h1>
-            <p>
-              Tech Radar LATAM combina recomendaciones personalizadas, ranking inteligente y chat conversacional para descubrir eventos en Ecuador,
-              México, Perú y el resto de la región.
-            </p>
-            <div className="metric-row">
-              <Metric value={totalEvents ? `${totalEvents}` : '—'} label="eventos analizados" />
-              <Metric value={`${countriesCovered}`} label="países cubiertos" />
-              <Metric value="IA" label="resumen y chat" />
+        recommendations !== null ? (
+          <main className="edit-shell">
+            <div className="edit-topbar">
+              <button className="back-chip" type="button" onClick={cancelEdit}>
+                <span aria-hidden="true">←</span>
+                <span>Volver al radar</span>
+              </button>
+              <div className="breadcrumb" aria-label="Ruta">
+                <span>Radar</span>
+                <span aria-hidden="true">/</span>
+                <span className="breadcrumb-current">Editar perfil</span>
+              </div>
             </div>
-          </section>
+            <ProfileForm
+              profile={profile}
+              options={options}
+              onChange={setProfile}
+              onSubmit={saveProfile}
+              submitting={loadingProfile}
+              mode="edit"
+              onCancel={cancelEdit}
+              hasChanges={profileHasChanges}
+            />
+          </main>
+        ) : (
+          <main className="hero-grid">
+            <section className="hero-copy panel">
+              <div className="eyebrow">LATAM events intelligence</div>
+              <h1>Un radar de eventos tech que entiende tu perfil y te explica el porqué.</h1>
+              <p>
+                Tech Radar LATAM combina recomendaciones personalizadas, ranking inteligente y chat conversacional para descubrir eventos en Ecuador,
+                México, Perú y el resto de la región.
+              </p>
+              <div className="metric-row">
+                <Metric value={totalEvents ? `${totalEvents}` : '—'} label="eventos analizados" />
+                <Metric value={`${countriesCovered}`} label="países cubiertos" />
+                <Metric value="IA" label="resumen y chat" />
+              </div>
+            </section>
 
-          <ProfileForm
-            profile={profile}
-            options={options}
-            onChange={setProfile}
-            onSubmit={saveProfile}
-            submitting={loadingProfile}
-          />
-        </main>
+            <ProfileForm
+              profile={profile}
+              options={options}
+              onChange={setProfile}
+              onSubmit={saveProfile}
+              submitting={loadingProfile}
+              mode="onboarding"
+            />
+          </main>
+        )
       ) : (
         <main className="dashboard-grid">
           <aside className="panel sidebar-panel">
@@ -235,7 +390,7 @@ export default function App() {
               <ProfileField label="Nivel" value={profile.level} />
               <ProfileField label="Intereses" value={profile.interests.join(', ') || '—'} />
             </div>
-            <button className="secondary-button" type="button" onClick={() => setProfileReady(false)}>
+            <button className="secondary-button" type="button" onClick={openEditor}>
               Editar perfil
             </button>
 
@@ -261,22 +416,41 @@ export default function App() {
               <FilterBar
                 filters={filters}
                 onChange={setFilters}
-                availableCountries={availableCountries}
-                availableCities={availableCities}
+                events={allEvents}
+                profileCountry={profile.country}
               />
             </section>
 
-            {loadingProfile && allEvents.length === 0 ? (
-              <EventCardSkeletonGrid count={4} />
+            {showSkeleton ? (
+              <div className="skeleton-wrapper">
+                {syncStatus?.running ? (
+                  <div className="sync-banner" role="status">
+                    <span className="sync-banner-dot" aria-hidden="true" />
+                    Sincronizando fuentes reales (Meetup, Eventbrite, GDG)…
+                  </div>
+                ) : null}
+                <EventCardSkeletonGrid count={4} />
+              </div>
             ) : isEmpty ? (
               <EventsEmptyState
-                title={hasFilters ? 'Sin eventos con esos filtros' : 'Todavía no hay eventos en tu radar'}
+                title={
+                  hasFilters
+                    ? 'Sin eventos con esos filtros'
+                    : syncStatus?.running
+                      ? 'Sincronizando fuentes reales…'
+                      : 'Todavía no hay eventos en tu radar'
+                }
                 description={
                   hasFilters
                     ? 'Intenta limpiar los filtros o ampliar tu búsqueda a otra ciudad o fuente.'
-                    : 'El backend sigue sincronizando. Vuelve en unos segundos o revisa tu conexión a la API.'
+                    : syncStatus?.running
+                      ? 'Estamos consultando Meetup, Eventbrite y GDG en vivo. En unos segundos aparecerán los eventos.'
+                      : 'Las fuentes públicas (Meetup, Eventbrite, GDG) no devolvieron eventos transformables. Reintenta la sincronización o revisa el detalle debajo.'
                 }
                 onReset={hasFilters ? () => setFilters(emptyFilters) : undefined}
+                syncStatus={hasFilters ? null : syncStatus?.lastResult ?? null}
+                syncRunning={triggeringSync || Boolean(syncStatus?.running)}
+                onRetrySync={hasFilters || syncStatus?.running ? undefined : handleRetrySync}
               />
             ) : (
               <section className="events-grid" aria-busy={loadingProfile}>
@@ -286,6 +460,9 @@ export default function App() {
                     event={event}
                     featured={index === 0}
                     onOpen={() => openEventAndRemember(event.id)}
+                    favorite={favorites.has(event.id)}
+                    canFavorite={Boolean(user)}
+                    onToggleFavorite={user ? () => void toggleFavorite(event.id) : undefined}
                   />
                 ))}
               </section>
@@ -343,6 +520,7 @@ export default function App() {
               response={chatResponse}
               error={chatError}
               onOpenEvent={openEventAndRemember}
+              loginRequired={chatLoginRequired}
             />
           </div>
         </main>
@@ -408,6 +586,16 @@ function ProfileField({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function sameProfile(a: UserProfile, b: UserProfile): boolean {
+  if (a.country !== b.country) return false;
+  if (a.role !== b.role) return false;
+  if (a.level !== b.level) return false;
+  if (a.interests.length !== b.interests.length) return false;
+  const sortedA = [...a.interests].sort();
+  const sortedB = [...b.interests].sort();
+  return sortedA.every((value, index) => value === sortedB[index]);
 }
 
 function loadProfile(): UserProfile {

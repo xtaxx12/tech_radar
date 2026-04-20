@@ -11,7 +11,7 @@ export type Role =
 
 export type Level = 'junior' | 'mid' | 'senior' | 'all';
 
-export type EventSource = 'meetup' | 'eventbrite' | 'gdg';
+export type EventSource = 'meetup' | 'eventbrite' | 'gdg' | 'community';
 
 export interface UnifiedEvent {
   id: string;

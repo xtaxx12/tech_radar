@@ -1,4 +1,3 @@
-import { meetupFallbackEvents } from '../data/fallback-events.js';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
@@ -58,8 +57,8 @@ export async function fetchMeetupEvents(): Promise<SourceFetchResult> {
     if (mapped.length === 0) {
       return {
         source: 'meetup',
-        events: meetupFallbackEvents,
-        usedFallback: true,
+        events: [],
+        usedFallback: false,
         error: 'Meetup devolvio 0 eventos transformables desde la fuente publica'
       };
     }
@@ -72,8 +71,8 @@ export async function fetchMeetupEvents(): Promise<SourceFetchResult> {
   } catch (error) {
     return {
       source: 'meetup',
-      events: meetupFallbackEvents,
-      usedFallback: true,
+      events: [],
+      usedFallback: false,
       error: error instanceof Error ? error.message : 'Error desconocido en Meetup'
     };
   }
