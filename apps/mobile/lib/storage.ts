@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import type { UserProfile } from './types';
+import type { ChatMessage, UserProfile } from './types';
 
 const TOKEN_KEY = 'tech_radar_token';
 const PROFILE_KEY = 'tech_radar_profile';
+const CHAT_KEY = 'tech_radar_chat';
+const CHAT_HISTORY_CAP = 50;
 
 const secureAvailable = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -43,4 +45,24 @@ export async function loadProfile(): Promise<UserProfile | null> {
   } catch {
     return null;
   }
+}
+
+export async function saveChatMessages(messages: ChatMessage[]): Promise<void> {
+  const trimmed = messages.slice(-CHAT_HISTORY_CAP);
+  await AsyncStorage.setItem(CHAT_KEY, JSON.stringify(trimmed));
+}
+
+export async function loadChatMessages(): Promise<ChatMessage[]> {
+  const raw = await AsyncStorage.getItem(CHAT_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as ChatMessage[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function clearChatMessages(): Promise<void> {
+  await AsyncStorage.removeItem(CHAT_KEY);
 }

@@ -1,5 +1,6 @@
 import { Redirect, Tabs } from 'expo-router';
 import { Text } from 'react-native';
+import { UserAvatar } from '../../components/UserAvatar';
 import { useAuth } from '../../lib/auth';
 import { theme } from '../../lib/theme';
 
@@ -13,6 +14,8 @@ export default function TabsLayout() {
         headerStyle: { backgroundColor: theme.colors.background },
         headerTintColor: theme.colors.textPrimary,
         headerTitleStyle: { color: theme.colors.textPrimary, fontWeight: '700' },
+        headerShadowVisible: false,
+        headerRight: () => <UserAvatar />,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border
@@ -27,6 +30,13 @@ export default function TabsLayout() {
         options={{
           title: 'Radar',
           tabBarIcon: ({ color }) => <TabIcon glyph="◎" color={color} />
+        }}
+      />
+      <Tabs.Screen
+        name="favorites"
+        options={{
+          title: 'Favoritos',
+          tabBarIcon: ({ color }) => <TabIcon glyph="★" color={color} />
         }}
       />
       <Tabs.Screen

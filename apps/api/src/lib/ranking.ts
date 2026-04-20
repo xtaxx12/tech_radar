@@ -89,9 +89,16 @@ export function enrichEvent(event: TechEvent, profile: UserProfile): RankedEvent
   if (dateDistance >= 0 && dateDistance <= 7) {
     score += 10;
     reasons.push('Ocurre esta semana, así que es relevante para actuar pronto.');
-  } else if (dateDistance <= 21) {
+  } else if (dateDistance >= 0 && dateDistance <= 21) {
     score += 6;
     reasons.push('Está cerca en el calendario y vale la pena tenerlo en radar.');
+  } else if (dateDistance < -7) {
+    // Eventos que ya sucedieron hace más de una semana caen al fondo del
+    // radar: queremos cubrir la actividad del chapter, pero no inflar el
+    // top con cosas que no se pueden asistir.
+    const penalty = Math.min(35, 20 + Math.floor(Math.abs(dateDistance) / 30) * 5);
+    score -= penalty;
+    reasons.push(`Ya sucedió hace ${Math.abs(dateDistance)} días; queda como referencia al final del radar.`);
   }
 
   if (event.trending || event.source === 'gdg') {
@@ -169,12 +176,18 @@ function daysUntil(dateIso: string): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-export function parseChatInterpretation(message: string): ChatInterpretation {
+export function parseChatInterpretation(message: string, knownCities: string[] = []): ChatInterpretation {
   const normalized = normalizeText(message);
   const interests = INTEREST_KEYWORDS.filter((keyword) => normalized.includes(keyword));
   const role = Object.entries(ROLE_KEYWORDS).find(([keyword]) => normalized.includes(keyword))?.[1];
   const level = Object.entries(LEVEL_KEYWORDS).find(([keyword]) => normalized.includes(keyword))?.[1];
   const country = COUNTRY_KEYWORDS.find(([keyword]) => normalized.includes(keyword))?.[1];
+
+  // Match the longest city name first so "santo domingo" wins over "santo".
+  const city = [...knownCities]
+    .filter((name) => name && name.trim())
+    .sort((a, b) => b.length - a.length)
+    .find((name) => normalized.includes(normalizeText(name)));
 
   let timeWindowDays = 30;
   if (normalized.includes('esta semana') || normalized.includes('semana')) {
@@ -188,6 +201,7 @@ export function parseChatInterpretation(message: string): ChatInterpretation {
   return {
     originalMessage: message,
     country,
+    city,
     role,
     level,
     interests: [...new Set(interests)],
@@ -202,11 +216,12 @@ export function filterByInterpretation(events: TechEvent[], interpretation: Chat
     const eventDate = new Date(event.date);
     const days = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const countryOk = interpretation.country ? normalizeText(event.country) === normalizeText(interpretation.country) : true;
+    const cityOk = interpretation.city ? normalizeText(event.city) === normalizeText(interpretation.city) : true;
     const levelOk = interpretation.level ? levelMatch(interpretation.level, event.level) : true;
     const interestOk = interpretation.interests.length > 0 ? interpretation.interests.some((interest) => event.tags.map(normalizeText).includes(interest)) : true;
     const timeOk = days >= 0 && days <= interpretation.timeWindowDays;
 
-    return countryOk && levelOk && interestOk && timeOk;
+    return countryOk && cityOk && levelOk && interestOk && timeOk;
   });
 }
 

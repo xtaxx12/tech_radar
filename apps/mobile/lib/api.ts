@@ -122,6 +122,16 @@ export function getRecommendations(profile: UserProfile, limit = 20): Promise<Re
   return request(`/events/recommended${query}`);
 }
 
+export function getAllEvents(profile: UserProfile): Promise<RecommendationsResponse> {
+  const query = toQuery({
+    country: profile.country,
+    role: profile.role,
+    level: profile.level,
+    interests: profile.interests
+  });
+  return request(`/events${query}`);
+}
+
 export function getEvent(id: string, profile: UserProfile): Promise<{ event: TechEvent }> {
   const query = toQuery({
     country: profile.country,

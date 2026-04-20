@@ -5,23 +5,51 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL?.trim() || 'http://localhost:11434';
 const AI_TIMEOUT_MS = 15_000;
 
+type AiProvider = 'ollama' | 'openai' | 'gemini' | 'auto';
+
+function resolveProvider(): AiProvider {
+  const raw = (process.env.AI_PROVIDER ?? '').trim().toLowerCase();
+  if (raw === 'ollama' || raw === 'openai' || raw === 'gemini') return raw;
+  return 'auto';
+}
+
 export async function generateText(prompt: string): Promise<string> {
+  const provider = resolveProvider();
   const ollamaModel = process.env.OLLAMA_MODEL?.trim();
   const openAiKey = process.env.OPENAI_API_KEY?.trim();
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
 
-  if (ollamaModel || process.env.USE_OLLAMA === 'true') {
-    return callOllama(prompt, ollamaModel || 'qwen2.5:7b-instruct');
+  if (provider === 'ollama') {
+    return callOllama(prompt, ollamaModel || 'qwen2.5:7b');
   }
 
-  if (openAiKey) {
+  if (provider === 'openai') {
+    if (!openAiKey) {
+      console.warn('[ai] AI_PROVIDER=openai pero falta OPENAI_API_KEY');
+      return fallbackText(prompt);
+    }
     return callOpenAI(prompt, openAiKey, process.env.OPENAI_MODEL ?? 'gpt-4o-mini');
   }
 
-  if (geminiKey) {
+  if (provider === 'gemini') {
+    if (!geminiKey) {
+      console.warn('[ai] AI_PROVIDER=gemini pero falta GEMINI_API_KEY');
+      return fallbackText(prompt);
+    }
     return callGemini(prompt, geminiKey, process.env.GEMINI_MODEL ?? 'gemini-1.5-flash');
   }
 
+  // Auto: detecta el primero que esté configurado. Mantiene compat con
+  // setups previos que solo definían USE_OLLAMA / OPENAI_API_KEY / GEMINI_API_KEY.
+  if (ollamaModel || process.env.USE_OLLAMA === 'true') {
+    return callOllama(prompt, ollamaModel || 'qwen2.5:7b');
+  }
+  if (openAiKey) {
+    return callOpenAI(prompt, openAiKey, process.env.OPENAI_MODEL ?? 'gpt-4o-mini');
+  }
+  if (geminiKey) {
+    return callGemini(prompt, geminiKey, process.env.GEMINI_MODEL ?? 'gemini-1.5-flash');
+  }
   return fallbackText(prompt);
 }
 
@@ -109,6 +137,8 @@ async function callOllama(prompt: string, model: string): Promise<string> {
     }, AI_TIMEOUT_MS);
 
     if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.warn(`[ai] ollama ${response.status} for model="${model}": ${body.slice(0, 200)}`);
       return fallbackText(prompt);
     }
 

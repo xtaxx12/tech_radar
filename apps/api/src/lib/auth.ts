@@ -20,8 +20,13 @@ export type AuthConfig = {
 export function getAuthConfig(): AuthConfig | null {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const sessionSecret = process.env.AUTH_SESSION_SECRET?.trim();
+  const databaseUrl = process.env.DATABASE_URL?.trim();
 
-  if (!clientId || !sessionSecret) {
+  // Auth requires all three: Google OAuth client, session secret, and a
+  // real Postgres to persist users + favorites. Without DATABASE_URL the
+  // user/user-event repositories throw at runtime, so we treat the whole
+  // auth subsystem as disabled to keep /auth/config honest.
+  if (!clientId || !sessionSecret || !databaseUrl) {
     return null;
   }
 

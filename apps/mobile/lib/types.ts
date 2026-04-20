@@ -84,3 +84,11 @@ export type FavoritesResponse = {
   favorites: string[];
   rsvp: string[];
 };
+
+export type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'error';
+  content: string;
+  events?: RankedEvent[];
+  timestamp: string;
+};

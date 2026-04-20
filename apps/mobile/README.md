@@ -38,7 +38,10 @@ apps/mobile/
 ```bash
 EXPO_PUBLIC_API_URL=http://localhost:4000
 EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=<tu client id WEB de Google Cloud>
-# Opcionales, mejoran UX cuando se use dev build:
+# Opcionales, requeridos solo en dev build / binario nativo.
+# EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS también define el iosUrlScheme en
+# app.config.ts automáticamente — asegúrate que tu client ID iOS real esté
+# aquí antes de hacer `expo prebuild`.
 EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=
 EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=
 ```
