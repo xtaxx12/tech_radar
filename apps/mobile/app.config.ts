@@ -28,12 +28,22 @@ const config: ExpoConfig = {
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
+  icon: './assets/icon.png',
+  splash: {
+    image: './assets/splash.png',
+    resizeMode: 'contain',
+    backgroundColor: '#0b1020'
+  },
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.techradar.mobile'
   },
   android: {
-    package: 'com.techradar.mobile'
+    package: 'com.techradar.mobile',
+    adaptiveIcon: {
+      foregroundImage: './assets/icon-foreground.png',
+      backgroundColor: '#0b1020'
+    }
   },
   web: {
     bundler: 'metro'

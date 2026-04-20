@@ -16,6 +16,7 @@ import { eventBus } from './lib/event-bus.js';
 import { buildRecommendationContext, enrichEvent, filterByInterpretation, generateChatAnswer, parseChatInterpretation, rankEvents } from './lib/ranking.js';
 import { normalizeText } from './lib/text.js';
 import { optionalAuth, requireAuth } from './middleware/auth.middleware.js';
+import { createRateLimiter } from './middleware/rate-limit.middleware.js';
 import { eventRepository } from './repositories/event.repository.js';
 import { userEventRepository, type UserEventType } from './repositories/user-event.repository.js';
 import { userRepository } from './repositories/user.repository.js';
@@ -33,6 +34,11 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
 app.use(optionalAuth);
+
+// Rate limit específico para /chat: protege el presupuesto de IA cuando un
+// token filtra o cuando alguien abusa del endpoint. Clave por userId cuando
+// hay sesión, por IP si no.
+const chatRateLimiter = createRateLimiter({ perSecond: 1, perHour: 30 });
 
 app.get('/health', (_request, response) => {
 	response.json({ ok: true, service: 'tech-radar-api', timestamp: new Date().toISOString() });
@@ -256,7 +262,7 @@ app.get('/sync/status', (_request, response) => {
 	});
 });
 
-app.post('/chat', chatAuthGate, asyncHandler(async (request, response) => {
+app.post('/chat', chatAuthGate, chatRateLimiter.middleware, asyncHandler(async (request, response) => {
 	const message = String(request.body?.message ?? '').slice(0, 2000);
 	const fallbackProfile = parseProfile(request.body?.profile ?? {});
 	const allEvents = await ensureEventsLoaded();

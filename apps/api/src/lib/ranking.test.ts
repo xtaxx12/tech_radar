@@ -67,6 +67,32 @@ describe('enrichEvent', () => {
     const ranked = enrichEvent(event, baseProfile);
     expect(ranked.badges).toContain('GDG');
   });
+
+  it('penalizes events that already happened more than a week ago', () => {
+    const upcoming = makeEvent({
+      id: 'fresh',
+      date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+    });
+    const old = makeEvent({
+      id: 'old',
+      date: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+    });
+
+    const rankedFresh = enrichEvent(upcoming, baseProfile);
+    const rankedOld = enrichEvent(old, baseProfile);
+
+    expect(rankedOld.score).toBeLessThan(rankedFresh.score);
+    expect(rankedOld.reasons.join(' ')).toMatch(/Ya sucedió/);
+  });
+
+  it('does not credit the 8-21 days bonus to past events', () => {
+    const pastTwoWeeks = makeEvent({
+      id: 'past-two-weeks',
+      date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+    });
+    const ranked = enrichEvent(pastTwoWeeks, baseProfile);
+    expect(ranked.reasons.join(' ')).not.toMatch(/Está cerca en el calendario/);
+  });
 });
 
 describe('rankEvents', () => {

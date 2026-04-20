@@ -89,9 +89,16 @@ export function enrichEvent(event: TechEvent, profile: UserProfile): RankedEvent
   if (dateDistance >= 0 && dateDistance <= 7) {
     score += 10;
     reasons.push('Ocurre esta semana, así que es relevante para actuar pronto.');
-  } else if (dateDistance <= 21) {
+  } else if (dateDistance >= 0 && dateDistance <= 21) {
     score += 6;
     reasons.push('Está cerca en el calendario y vale la pena tenerlo en radar.');
+  } else if (dateDistance < -7) {
+    // Eventos que ya sucedieron hace más de una semana caen al fondo del
+    // radar: queremos cubrir la actividad del chapter, pero no inflar el
+    // top con cosas que no se pueden asistir.
+    const penalty = Math.min(35, 20 + Math.floor(Math.abs(dateDistance) / 30) * 5);
+    score -= penalty;
+    reasons.push(`Ya sucedió hace ${Math.abs(dateDistance)} días; queda como referencia al final del radar.`);
   }
 
   if (event.trending || event.source === 'gdg') {
