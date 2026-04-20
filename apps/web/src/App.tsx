@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getChatResponse, getEventDetail, getProfileOptions, getRecommendations } from './api';
+import { getChatResponse, getEventDetail, getProfileOptions, getRecommendations, getSyncStatus, triggerSync } from './api';
 import { ChatPanel } from './components/ChatPanel';
 import { EventCard } from './components/EventCard';
 import { EventCardSkeletonGrid } from './components/EventCardSkeleton';
@@ -7,7 +7,7 @@ import { EventDetail } from './components/EventDetail';
 import { EventsEmptyState } from './components/EventsEmptyState';
 import { FilterBar, type EventFilters } from './components/FilterBar';
 import { ProfileForm } from './components/ProfileForm';
-import type { ChatResponse, ProfileOptions, RankedEvent, RecommendationsResponse, UserProfile } from './types';
+import type { ChatResponse, ProfileOptions, RankedEvent, RecommendationsResponse, SyncStatus, UserProfile } from './types';
 
 const defaultProfile: UserProfile = {
   country: 'Ecuador',
@@ -34,10 +34,13 @@ export default function App() {
   const [profileReady, setProfileReady] = useState(Boolean(localStorage.getItem('techRadarProfile')));
   const [filters, setFilters] = useState<EventFilters>(emptyFilters);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [triggeringSync, setTriggeringSync] = useState(false);
   const scrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     void getProfileOptions().then(setOptions).catch(() => setOptions(null));
+    void getSyncStatus().then(setSyncStatus).catch(() => setSyncStatus(null));
   }, []);
 
   useEffect(() => {
@@ -131,6 +134,26 @@ export default function App() {
     setProfileReady(true);
   };
 
+  const refreshSyncStatus = () => {
+    void getSyncStatus().then(setSyncStatus).catch(() => undefined);
+  };
+
+  const handleRetrySync = () => {
+    setTriggeringSync(true);
+    setSyncStatus((current) => (current ? { ...current, running: true } : current));
+    triggerSync()
+      .then((data) => {
+        setSyncStatus({ running: false, lastResult: data.result });
+        return getRecommendations(profile, filters);
+      })
+      .then((data) => setRecommendations(data))
+      .catch(() => undefined)
+      .finally(() => {
+        setTriggeringSync(false);
+        refreshSyncStatus();
+      });
+  };
+
   const handleChatSubmit = () => {
     setLoadingChat(true);
     setChatError(null);
@@ -150,7 +173,10 @@ export default function App() {
   const trendingCount = recommendations?.context.trending ?? 0;
   const isEventRoute = routePath.startsWith('/events/');
   const hasFilters = Boolean(filters.source || filters.country || filters.city);
-  const isEmpty = profileReady && !loadingProfile && allEvents.length === 0;
+  const showSkeleton = loadingProfile && recommendations === null;
+  const isEmpty = profileReady && !showSkeleton && allEvents.length === 0;
+  const healthySources = syncStatus?.lastResult?.sources.filter((source) => source.count > 0 && !source.error).length ?? 0;
+  const totalSources = syncStatus?.lastResult?.sources.length ?? 0;
 
   const openEventAndRemember = (eventId: string) => {
     scrollPositionsRef.current['/'] = window.scrollY;
@@ -187,9 +213,14 @@ export default function App() {
           <div className="brand">Tech Radar LATAM</div>
           <p className="muted">Descubre eventos tecnológicos relevantes con IA y datos de Meetup, Eventbrite y GDG.</p>
         </div>
-        <div className="status-pill" aria-label="Estado de la API">
+        <div
+          className={`status-pill ${totalSources > 0 && healthySources === 0 ? 'status-pill-warn' : ''}`}
+          aria-label="Estado de las fuentes de datos"
+        >
           <span className="status-dot" aria-hidden="true" />
-          API + IA fallback local
+          {totalSources > 0
+            ? `${healthySources}/${totalSources} fuentes activas`
+            : 'Conectando fuentes…'}
         </div>
       </header>
 
@@ -258,7 +289,7 @@ export default function App() {
               />
             </section>
 
-            {loadingProfile && allEvents.length === 0 ? (
+            {showSkeleton ? (
               <EventCardSkeletonGrid count={4} />
             ) : isEmpty ? (
               <EventsEmptyState
@@ -266,9 +297,12 @@ export default function App() {
                 description={
                   hasFilters
                     ? 'Intenta limpiar los filtros o ampliar tu búsqueda a otra ciudad o fuente.'
-                    : 'El backend sigue sincronizando. Vuelve en unos segundos o revisa tu conexión a la API.'
+                    : 'Las fuentes públicas (Meetup, Eventbrite, GDG) no devolvieron eventos transformables. Reintenta la sincronización o revisa el detalle debajo.'
                 }
                 onReset={hasFilters ? () => setFilters(emptyFilters) : undefined}
+                syncStatus={hasFilters ? null : syncStatus?.lastResult ?? null}
+                syncRunning={triggeringSync || Boolean(syncStatus?.running)}
+                onRetrySync={hasFilters ? undefined : handleRetrySync}
               />
             ) : (
               <section className="events-grid" aria-busy={loadingProfile}>

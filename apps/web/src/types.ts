@@ -61,6 +61,28 @@ export interface EventDetailResponse {
   event: RankedEvent;
 }
 
+export interface SyncSourceStatus {
+  source: 'meetup' | 'eventbrite' | 'gdg' | 'community';
+  count: number;
+  usedFallback: boolean;
+  error?: string;
+}
+
+export interface SyncResultPayload {
+  fetched: number;
+  cleaned: number;
+  deduped: number;
+  saved: number;
+  startedAt: string;
+  finishedAt: string;
+  sources: SyncSourceStatus[];
+}
+
+export interface SyncStatus {
+  running: boolean;
+  lastResult: SyncResultPayload | null;
+}
+
 export interface ChatResponse {
   interpretation: {
     country?: string;

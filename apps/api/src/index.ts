@@ -4,7 +4,7 @@ import express, { type NextFunction, type Request, type RequestHandler, type Res
 import { buildRecommendationContext, enrichEvent, filterByInterpretation, generateChatAnswer, parseChatInterpretation, rankEvents } from './lib/ranking.js';
 import { normalizeText } from './lib/text.js';
 import { eventRepository } from './repositories/event.repository.js';
-import { syncEvents } from './services/sync.service.js';
+import { getLastSyncResult, isSyncRunning, syncEvents } from './services/sync.service.js';
 import type { TechEvent, UserProfile } from './types.js';
 
 dotenv.config();
@@ -77,6 +77,13 @@ app.post('/sync', asyncHandler(async (_request, response) => {
 	const result = await syncEvents();
 	response.json({ ok: true, result });
 }));
+
+app.get('/sync/status', (_request, response) => {
+	response.json({
+		running: isSyncRunning(),
+		lastResult: getLastSyncResult()
+	});
+});
 
 app.post('/chat', asyncHandler(async (request, response) => {
 	const message = String(request.body?.message ?? '').slice(0, 2000);

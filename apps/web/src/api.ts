@@ -1,4 +1,4 @@
-import type { ChatResponse, EventDetailResponse, ProfileOptions, RecommendationsResponse, UserProfile } from './types';
+import type { ChatResponse, EventDetailResponse, ProfileOptions, RecommendationsResponse, SyncStatus, UserProfile } from './types';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
@@ -53,4 +53,12 @@ export function getChatResponse(message: string, profile: UserProfile): Promise<
 
 export function getEventDetail(eventId: string): Promise<EventDetailResponse> {
   return requestJson<EventDetailResponse>(`/events/${eventId}`);
+}
+
+export function getSyncStatus(): Promise<SyncStatus> {
+  return requestJson<SyncStatus>('/sync/status');
+}
+
+export function triggerSync(): Promise<{ ok: boolean; result: SyncStatus['lastResult'] }> {
+  return requestJson('/sync', { method: 'POST' });
 }
