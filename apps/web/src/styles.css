@@ -109,6 +109,8 @@ a {
   align-items: flex-start;
   gap: var(--space-4);
   margin-bottom: var(--space-6);
+  position: relative;
+  z-index: 40;
 }
 
 .brand,
@@ -651,6 +653,7 @@ a:focus-visible {
 .sidebar-panel {
   position: sticky;
   top: var(--space-6);
+  z-index: 5;
 }
 
 .profile-stack {
@@ -1207,6 +1210,7 @@ a:focus-visible {
 .chat-column {
   position: sticky;
   top: var(--space-6);
+  z-index: 5;
 }
 
 .chat-panel {
