@@ -1,4 +1,5 @@
 import { eventbriteFallbackEvents } from '../data/fallback-events.js';
+import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
 
@@ -18,7 +19,7 @@ type EventbriteEvent = {
 
 export async function fetchEventbriteEvents(): Promise<SourceFetchResult> {
   try {
-    const response = await fetch(EVENTBRITE_SEARCH_PAGE, {
+    const response = await fetchWithTimeout(EVENTBRITE_SEARCH_PAGE, {
       method: 'GET',
       headers: {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'

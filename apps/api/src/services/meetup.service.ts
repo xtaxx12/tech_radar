@@ -1,4 +1,5 @@
 import { meetupFallbackEvents } from '../data/fallback-events.js';
+import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
 
@@ -39,7 +40,7 @@ export async function fetchMeetupEvents(): Promise<SourceFetchResult> {
     const dataUrl = new URL(`https://www.meetup.com/_next/data/${buildId}/find.json`);
     dataUrl.searchParams.set('keywords', 'technology');
 
-    const response = await fetch(dataUrl, {
+    const response = await fetchWithTimeout(dataUrl, {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain, */*'
@@ -165,7 +166,7 @@ function stripHtml(input?: string): string {
 
 async function resolveBuildId(): Promise<string | null> {
   try {
-    const response = await fetch(MEETUP_SEARCH_PAGE, { method: 'GET' });
+    const response = await fetchWithTimeout(MEETUP_SEARCH_PAGE, { method: 'GET' });
     if (!response.ok) {
       return null;
     }

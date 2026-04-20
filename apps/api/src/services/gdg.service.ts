@@ -1,4 +1,5 @@
 import { gdgFallbackEvents } from '../data/fallback-events.js';
+import { fetchWithTimeout } from '../lib/fetch-with-timeout.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
 
@@ -8,6 +9,7 @@ type GdgApiEvent = {
   description_short?: string;
   description?: string;
   start_date?: string;
+  date?: string;
   city?: string;
   country?: string;
   url?: string;
@@ -25,7 +27,7 @@ const GDG_SEARCH_ENDPOINT = 'https://gdg.community.dev/api/search/?result_types=
 
 export async function fetchGDGEvents(): Promise<SourceFetchResult> {
   try {
-    const response = await fetch(GDG_SEARCH_ENDPOINT, {
+    const response = await fetchWithTimeout(GDG_SEARCH_ENDPOINT, {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain, */*'

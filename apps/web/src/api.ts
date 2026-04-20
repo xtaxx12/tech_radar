@@ -23,13 +23,23 @@ export function getProfileOptions(): Promise<ProfileOptions> {
   return requestJson<ProfileOptions>('/profile-options');
 }
 
-export function getRecommendations(profile: UserProfile): Promise<RecommendationsResponse> {
+export type EventQueryFilters = {
+  source?: string;
+  country?: string;
+  city?: string;
+};
+
+export function getRecommendations(profile: UserProfile, filters: EventQueryFilters = {}): Promise<RecommendationsResponse> {
   const query = new URLSearchParams({
     country: profile.country,
     role: profile.role,
     level: profile.level,
     interests: profile.interests.join(',')
   });
+
+  if (filters.source) query.set('source', filters.source);
+  if (filters.country) query.set('countryFilter', filters.country);
+  if (filters.city) query.set('city', filters.city);
 
   return requestJson<RecommendationsResponse>(`/events?${query.toString()}`);
 }

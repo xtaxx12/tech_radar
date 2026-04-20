@@ -1,7 +1,8 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
-import express from 'express';
+import express, { type NextFunction, type Request, type RequestHandler, type Response } from 'express';
 import { buildRecommendationContext, enrichEvent, filterByInterpretation, generateChatAnswer, parseChatInterpretation, rankEvents } from './lib/ranking.js';
+import { normalizeText } from './lib/text.js';
 import { eventRepository } from './repositories/event.repository.js';
 import { syncEvents } from './services/sync.service.js';
 import type { TechEvent, UserProfile } from './types.js';
@@ -9,12 +10,12 @@ import type { TechEvent, UserProfile } from './types.js';
 dotenv.config();
 
 const app = express();
-const port = Number(process.env.PORT ?? 4000);
-const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
-const syncIntervalMinutes = Number(process.env.SYNC_INTERVAL_MINUTES ?? 60);
+const port = parsePort(process.env.PORT, 4000);
+const corsOrigin = process.env.CORS_ORIGIN?.trim() || 'http://localhost:5173';
+const syncIntervalMinutes = parsePositiveNumber(process.env.SYNC_INTERVAL_MINUTES, 60);
 
 app.use(cors({ origin: corsOrigin }));
-app.use(express.json());
+app.use(express.json({ limit: '256kb' }));
 
 app.get('/health', (_request, response) => {
 	response.json({ ok: true, service: 'tech-radar-api', timestamp: new Date().toISOString() });
@@ -29,10 +30,11 @@ app.get('/profile-options', (_request, response) => {
 	});
 });
 
-app.get('/events', async (request, response) => {
+app.get('/events', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);
 	const allEvents = await ensureEventsLoaded();
-	const ranked = rankEvents(applyQueryFilters(allEvents, request.query), profile, allEvents.length);
+	const filtered = applyQueryFilters(allEvents, request.query);
+	const ranked = rankEvents(filtered, profile, filtered.length);
 
 	response.json({
 		profile,
@@ -41,22 +43,25 @@ app.get('/events', async (request, response) => {
 		events: ranked,
 		total: ranked.length
 	});
-});
+}));
 
-app.get('/events/recommended', async (request, response) => {
+app.get('/events/recommended', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);
 	const limit = clampLimit(request.query.limit, 10);
 	const allEvents = await ensureEventsLoaded();
-	const ranked = rankEvents(applyQueryFilters(allEvents, request.query), profile, limit);
+	const filtered = applyQueryFilters(allEvents, request.query);
+	const ranked = rankEvents(filtered, profile, limit);
 
 	response.json({
 		profile,
+		context: buildRecommendationContext(profile, ranked),
 		recommendations: ranked,
-		context: buildRecommendationContext(profile, ranked)
+		events: ranked,
+		total: ranked.length
 	});
-});
+}));
 
-app.get('/events/:id', async (request, response) => {
+app.get('/events/:id', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);
 	const event = await eventRepository.getById(request.params.id);
 
@@ -66,15 +71,15 @@ app.get('/events/:id', async (request, response) => {
 	}
 
 	response.json({ event: enrichEvent(event, profile) });
-});
+}));
 
-app.post('/sync', async (_request, response) => {
+app.post('/sync', asyncHandler(async (_request, response) => {
 	const result = await syncEvents();
 	response.json({ ok: true, result });
-});
+}));
 
-app.post('/chat', async (request, response) => {
-	const message = String(request.body?.message ?? '');
+app.post('/chat', asyncHandler(async (request, response) => {
+	const message = String(request.body?.message ?? '').slice(0, 2000);
 	const fallbackProfile = parseProfile(request.body?.profile ?? {});
 	const interpretation = parseChatInterpretation(message);
 	const mergedInterpretation = {
@@ -96,23 +101,41 @@ app.post('/chat', async (request, response) => {
 		events: ranked,
 		context: buildRecommendationContext(fallbackProfile, ranked)
 	});
+}));
+
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+	const message = err instanceof Error ? err.message : 'Unknown error';
+	console.error('[api] unhandled error:', message);
+	if (res.headersSent) return;
+	res.status(500).json({ error: 'internal_server_error' });
 });
 
 void bootstrap();
 
 async function bootstrap() {
 	await eventRepository.init();
-	await syncEvents();
+
+	syncEvents().catch((error) => {
+		console.error('[api] initial sync failed:', error instanceof Error ? error.message : error);
+	});
 
 	if (syncIntervalMinutes > 0) {
 		setInterval(() => {
-			void syncEvents();
+			syncEvents().catch((error) => {
+				console.error('[api] scheduled sync failed:', error instanceof Error ? error.message : error);
+			});
 		}, syncIntervalMinutes * 60 * 1000);
 	}
 
 	app.listen(port, () => {
 		console.log(`Tech Radar LATAM API running on http://localhost:${port}`);
 	});
+}
+
+function asyncHandler(handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler {
+	return (req, res, next) => {
+		Promise.resolve(handler(req, res, next)).catch(next);
+	};
 }
 
 function parseProfile(value: unknown): UserProfile {
@@ -178,14 +201,14 @@ async function ensureEventsLoaded(): Promise<TechEvent[]> {
 }
 
 function applyQueryFilters(events: TechEvent[], query: Record<string, unknown>): TechEvent[] {
-	const source = String(query.source ?? '').toLowerCase().trim();
-	const country = String(query.countryFilter ?? '').toLowerCase().trim();
-	const city = String(query.city ?? '').toLowerCase().trim();
+	const source = normalizeText(String(query.source ?? ''));
+	const country = normalizeText(String(query.countryFilter ?? ''));
+	const city = normalizeText(String(query.city ?? ''));
 
 	return events.filter((event) => {
-		const sourceOk = source ? event.source === source : true;
-		const countryOk = country ? event.country.toLowerCase().includes(country) : true;
-		const cityOk = city ? event.city.toLowerCase().includes(city) : true;
+		const sourceOk = source ? normalizeText(event.source) === source : true;
+		const countryOk = country ? normalizeText(event.country) === country : true;
+		const cityOk = city ? normalizeText(event.city) === city : true;
 		return sourceOk && countryOk && cityOk;
 	});
 }
@@ -194,4 +217,21 @@ function clampLimit(value: unknown, fallback: number): number {
 	const parsed = Number(value ?? fallback);
 	if (!Number.isFinite(parsed)) return fallback;
 	return Math.max(1, Math.min(50, parsed));
+}
+
+function parsePort(value: string | undefined, fallback: number): number {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 65535) {
+		if (value && value.trim()) {
+			console.warn(`[api] PORT="${value}" inválido, usando ${fallback}`);
+		}
+		return fallback;
+	}
+	return Math.floor(parsed);
+}
+
+function parsePositiveNumber(value: string | undefined, fallback: number): number {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+	return parsed;
 }

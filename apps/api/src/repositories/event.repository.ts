@@ -3,6 +3,7 @@ import type { TechEvent } from '../types.js';
 
 const DEFAULT_DB_NAME = 'tech_radar_latam';
 const DEFAULT_COLLECTION = 'events';
+const MEMORY_STORE_CAP = 5000;
 
 class EventRepository {
   private client: MongoClient | null = null;
@@ -40,7 +41,13 @@ class EventRepository {
       for (const event of events) {
         byId.set(event.id, event);
       }
-      this.memoryStore = [...byId.values()];
+      let next = [...byId.values()];
+      if (next.length > MEMORY_STORE_CAP) {
+        next = next
+          .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+          .slice(0, MEMORY_STORE_CAP);
+      }
+      this.memoryStore = next;
       return events.length;
     }
 

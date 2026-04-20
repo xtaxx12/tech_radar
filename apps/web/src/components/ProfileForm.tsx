@@ -70,7 +70,14 @@ export function ProfileForm({ profile, options, onChange, onSubmit, submitting }
           {(options?.interests ?? ['ia', 'web', 'mobile', 'blockchain', 'cloud', 'data']).map((interest) => {
             const active = profile.interests.includes(interest);
             return (
-              <button key={interest} type="button" className={active ? 'chip chip-active' : 'chip'} onClick={() => toggleInterest(interest)}>
+              <button
+                key={interest}
+                type="button"
+                className={active ? 'chip chip-active' : 'chip'}
+                onClick={() => toggleInterest(interest)}
+                aria-pressed={active}
+                aria-label={`Interés ${interest}${active ? ' (seleccionado)' : ''}`}
+              >
                 {interest}
               </button>
             );
