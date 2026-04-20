@@ -2,9 +2,57 @@ import { fetchWithTimeout } from './fetch-with-timeout.js';
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const AI_TIMEOUT_MS = 15_000;
+
+// Timeouts por proveedor. Ollama corre local (CPU) y un 7B puede tardar
+// 20-40s en arrancar en frío; las APIs cloud son consistentemente rápidas.
+const OLLAMA_TIMEOUT_MS = 45_000;
+const CLOUD_TIMEOUT_MS = 15_000;
 
 const LOCAL_HOST_PATTERN = /(localhost|127\.0\.0\.1|host\.docker\.internal|0\.0\.0\.0)/i;
+
+// Circuit breaker: si un provider falla 3 veces seguidas, lo saltamos durante
+// 60s. Evita tirarle 389 timeouts de 45s cada vez que el sync enriquece
+// eventos mientras Ollama no puede con la carga.
+const BREAKER_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 60_000;
+
+type BreakerState = { failures: number; openedAt: number | null };
+const breakers = new Map<string, BreakerState>();
+
+function getBreaker(name: string): BreakerState {
+  let state = breakers.get(name);
+  if (!state) {
+    state = { failures: 0, openedAt: null };
+    breakers.set(name, state);
+  }
+  return state;
+}
+
+function isBreakerOpen(name: string): boolean {
+  const state = breakers.get(name);
+  if (!state || state.openedAt === null) return false;
+  if (Date.now() - state.openedAt < BREAKER_COOLDOWN_MS) return true;
+  // Cooldown vencido: reset y permitir reintento.
+  state.failures = 0;
+  state.openedAt = null;
+  return false;
+}
+
+function recordFailure(name: string): void {
+  const state = getBreaker(name);
+  state.failures += 1;
+  if (state.failures >= BREAKER_THRESHOLD && state.openedAt === null) {
+    state.openedAt = Date.now();
+    console.warn(`[ai] circuit breaker abierto para ${name} por ${Math.round(BREAKER_COOLDOWN_MS / 1000)}s`);
+  }
+}
+
+function recordSuccess(name: string): void {
+  const state = breakers.get(name);
+  if (!state) return;
+  state.failures = 0;
+  state.openedAt = null;
+}
 
 export type AiProvider = 'ollama' | 'openai' | 'gemini';
 type ProviderCall = (prompt: string) => Promise<string>;
@@ -59,14 +107,21 @@ export async function generateText(prompt: string): Promise<string> {
   const chain = selectProviderChain();
 
   for (const provider of chain) {
+    if (isBreakerOpen(provider.name)) continue;
+
     try {
       const text = await provider.run(prompt);
       const trimmed = text.trim();
-      if (trimmed.length > 0) return trimmed;
+      if (trimmed.length > 0) {
+        recordSuccess(provider.name);
+        return trimmed;
+      }
       console.warn(`[ai] provider ${provider.name} devolvió texto vacío, probando el siguiente`);
+      recordFailure(provider.name);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[ai] provider ${provider.name} falló: ${message}`);
+      recordFailure(provider.name);
     }
   }
 
@@ -120,7 +175,7 @@ async function callOpenAI(prompt: string, apiKey: string, model: string): Promis
       ],
       temperature: 0.3
     })
-  }, AI_TIMEOUT_MS);
+  }, CLOUD_TIMEOUT_MS);
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -151,7 +206,7 @@ async function callGemini(prompt: string, apiKey: string, model: string): Promis
         temperature: 0.3
       }
     })
-  }, AI_TIMEOUT_MS);
+  }, CLOUD_TIMEOUT_MS);
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -181,7 +236,7 @@ async function callOllama(prompt: string, baseUrl: string, model: string): Promi
         temperature: 0.2
       }
     })
-  }, AI_TIMEOUT_MS);
+  }, OLLAMA_TIMEOUT_MS);
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');

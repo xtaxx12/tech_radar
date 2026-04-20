@@ -38,7 +38,33 @@ app.use(optionalAuth);
 // Rate limit específico para /chat: protege el presupuesto de IA cuando un
 // token filtra o cuando alguien abusa del endpoint. Clave por userId cuando
 // hay sesión, por IP si no.
+// Nota: el limiter es in-memory, así que cada restart del servidor reinicia
+// las cuentas. Para un deploy multi-instancia o con autoscaling habría que
+// moverlo a Redis / Upstash o similar.
 const chatRateLimiter = createRateLimiter({ perSecond: 1, perHour: 30 });
+
+// Umbrales del cálculo dinámico de "trending": el ranking considera un
+// evento trending si acumula al menos N interacciones (favoritos + RSVPs)
+// en los últimos D días. Se recalcula al principio de cada /events.
+const TRENDING_WINDOW_DAYS = 14;
+const TRENDING_MIN_INTERACTIONS = 2;
+
+async function getTrendingEventIds(): Promise<Set<string>> {
+	try {
+		const since = new Date(Date.now() - TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+		const counts = await userEventRepository.countInteractionsByEvent(since);
+		const trending = new Set<string>();
+		for (const [eventId, total] of counts) {
+			if (total >= TRENDING_MIN_INTERACTIONS) trending.add(eventId);
+		}
+		return trending;
+	} catch (error) {
+		// Si falla la query (p. ej. modo memoria sin DB) degradamos a ranking
+		// sin señal de trending en lugar de romper todo el endpoint.
+		console.warn('[trending] fallback vacío:', error instanceof Error ? error.message : error);
+		return new Set();
+	}
+}
 
 app.get('/health', (_request, response) => {
 	response.json({ ok: true, service: 'tech-radar-api', timestamp: new Date().toISOString() });
@@ -171,9 +197,12 @@ app.get('/profile-options', (_request, response) => {
 
 app.get('/events', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);
-	const allEvents = await ensureEventsLoaded();
+	const [allEvents, trendingIds] = await Promise.all([
+		ensureEventsLoaded(),
+		getTrendingEventIds()
+	]);
 	const filtered = applyQueryFilters(allEvents, request.query);
-	const ranked = rankEvents(filtered, profile, filtered.length);
+	const ranked = rankEvents(filtered, profile, filtered.length, trendingIds);
 
 	response.json({
 		profile,
@@ -225,9 +254,12 @@ app.get('/events/stream', (request, response) => {
 app.get('/events/recommended', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);
 	const limit = clampLimit(request.query.limit, 10);
-	const allEvents = await ensureEventsLoaded();
+	const [allEvents, trendingIds] = await Promise.all([
+		ensureEventsLoaded(),
+		getTrendingEventIds()
+	]);
 	const filtered = applyQueryFilters(allEvents, request.query);
-	const ranked = rankEvents(filtered, profile, limit);
+	const ranked = rankEvents(filtered, profile, limit, trendingIds);
 
 	response.json({
 		profile,
@@ -240,14 +272,17 @@ app.get('/events/recommended', asyncHandler(async (request, response) => {
 
 app.get('/events/:id', asyncHandler(async (request, response) => {
 	const profile = readProfile(request.query);
-	const event = await eventRepository.getById(request.params.id);
+	const [event, trendingIds] = await Promise.all([
+		eventRepository.getById(request.params.id),
+		getTrendingEventIds()
+	]);
 
 	if (!event) {
 		response.status(404).json({ error: 'Event not found' });
 		return;
 	}
 
-	response.json({ event: enrichEvent(event, profile) });
+	response.json({ event: enrichEvent(event, profile, trendingIds) });
 }));
 
 app.post('/sync', asyncHandler(async (_request, response) => {
@@ -437,12 +472,27 @@ function applyQueryFilters(events: TechEvent[], query: Record<string, unknown>):
 	const source = normalizeText(String(query.source ?? ''));
 	const country = normalizeText(String(query.countryFilter ?? ''));
 	const city = normalizeText(String(query.city ?? ''));
+	const rawQ = typeof query.q === 'string' ? query.q.trim() : '';
+	const qTokens = rawQ
+		? rawQ
+				.split(/\s+/)
+				.map((token) => normalizeText(token))
+				.filter((token) => token.length >= 2)
+		: [];
 
 	return events.filter((event) => {
 		const sourceOk = source ? normalizeText(event.source) === source : true;
 		const countryOk = country ? normalizeText(event.country) === country : true;
 		const cityOk = city ? normalizeText(event.city) === city : true;
-		return sourceOk && countryOk && cityOk;
+
+		if (qTokens.length === 0) return sourceOk && countryOk && cityOk;
+
+		const haystack = normalizeText(
+			[event.title, event.description, event.summary, event.city, event.country, (event.tags ?? []).join(' ')].join(' ')
+		);
+		// AND entre tokens: todos deben aparecer para que cuente como match.
+		const matchesQuery = qTokens.every((token) => haystack.includes(token));
+		return sourceOk && countryOk && cityOk && matchesQuery;
 	});
 }
 

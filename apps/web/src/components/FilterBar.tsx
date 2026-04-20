@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RankedEvent } from '../types';
 
 export type EventFilters = {
   source: string;
   country: string;
   city: string;
+  q: string;
 };
 
 type Props = {
@@ -26,8 +27,22 @@ export function FilterBar({ filters, onChange, events, profileCountry }: Props) 
   const countryOptions = useMemo(() => buildCountryOptions(events, profileCountry), [events, profileCountry]);
   const cityOptions = useMemo(() => buildCityOptions(events, filters.country), [events, filters.country]);
 
-  const hasFilters = Boolean(filters.source || filters.country || filters.city);
-  const clear = () => onChange({ source: '', country: '', city: '' });
+  // Debounce de la búsqueda: escribir "react" no dispara 5 requests.
+  const [searchDraft, setSearchDraft] = useState(filters.q);
+  useEffect(() => {
+    setSearchDraft(filters.q);
+  }, [filters.q]);
+  useEffect(() => {
+    if (searchDraft === filters.q) return;
+    const handle = setTimeout(() => onChange({ ...filters, q: searchDraft }), 250);
+    return () => clearTimeout(handle);
+  }, [searchDraft, filters, onChange]);
+
+  const hasFilters = Boolean(filters.source || filters.country || filters.city || filters.q);
+  const clear = () => {
+    setSearchDraft('');
+    onChange({ source: '', country: '', city: '', q: '' });
+  };
 
   const handleCountryChange = (nextCountry: string) => {
     const nextCity = nextCountry === filters.country ? filters.city : '';
@@ -36,6 +51,28 @@ export function FilterBar({ filters, onChange, events, profileCountry }: Props) 
 
   return (
     <div className="filter-bar" role="region" aria-label="Filtros de eventos">
+      <div className="filter-search">
+        <span className="filter-search-icon" aria-hidden="true">⌕</span>
+        <input
+          type="search"
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
+          placeholder="Buscar por título, tecnología, ciudad…"
+          aria-label="Buscar eventos"
+          autoComplete="off"
+        />
+        {searchDraft ? (
+          <button
+            type="button"
+            className="filter-search-clear"
+            onClick={() => setSearchDraft('')}
+            aria-label="Limpiar búsqueda"
+          >
+            ✕
+          </button>
+        ) : null}
+      </div>
+
       <div className="filter-group">
         <div className="filter-label">Fuente</div>
         <div className="prompt-pills">

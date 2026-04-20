@@ -29,6 +29,10 @@ Tech Radar LATAM:
   heurísticas cuando no hay API key.
 - **Rankea por perfil**: país, rol, nivel, intereses, cercanía temporal.
   Cada recomendación viene con **razones explicables** (nada de caja negra).
+- **Trending dinámico**: un evento se vuelve *trending* cuando al menos 2
+  usuarios lo favoritearon o confirmaron asistencia en los últimos 14 días.
+  El ranking usa esta señal real (no un campo hardcoded) para subirlo al
+  top con un bonus explícito y el badge *Trending*.
 - **Chat conversacional**: “Eventos de IA esta semana en Ecuador para
   junior” → lista filtrada + explicación.
 - **Favoritos y RSVP** persistidos en Postgres, login con Google.
@@ -115,6 +119,8 @@ Tech Radar LATAM:
 | **IA cascada**: Ollama → OpenAI → Gemini → fallback heurístico | Que funcione aunque no tengas tarjeta de crédito. En desarrollo local corre sin keys |
 | **Fallback events removido** | Para presentar a la comunidad real, los datos tienen que ser reales. Si las fuentes fallan, el empty state explica por qué |
 | **Drizzle con pgEnum** para `source` y `level` | Integridad real a nivel DB, no solo a nivel aplicación |
+| **Rate limit in-memory** en `/chat` | Simple y sin deps extras. El trade-off: en deploy multi-instancia o tras un restart, las cuentas se pierden. Para escalar, mover a Redis/Upstash con la misma API (`createRateLimiter` ya es un factory) |
+| **Trending calculado en runtime** (no batch) | Fresh signal: el evento que favoriteás ahora influye en el radar de los siguientes requests. El cost es una query agregada por hit a `/events` — barata porque `user_events` está indexada por `user_id` y es chica |
 
 ---
 

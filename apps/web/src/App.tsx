@@ -19,7 +19,7 @@ const defaultProfile: UserProfile = {
   interests: ['ia', 'web']
 };
 
-const emptyFilters: EventFilters = { source: '', country: '', city: '' };
+const emptyFilters: EventFilters = { source: '', country: '', city: '', q: '' };
 
 export default function App() {
   const { user, favorites, rsvp, config: authConfig, toggleFavorite, toggleRsvp } = useAuth();
@@ -43,7 +43,17 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [triggeringSync, setTriggeringSync] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const scrollPositionsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!chatDrawerOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [chatDrawerOpen]);
 
   useEffect(() => {
     void getProfileOptions().then(setOptions).catch(() => setOptions(null));
@@ -269,7 +279,7 @@ export default function App() {
   const totalEvents = recommendations?.context.total ?? allEvents.length;
   const trendingCount = recommendations?.context.trending ?? 0;
   const isEventRoute = routePath.startsWith('/events/');
-  const hasFilters = Boolean(filters.source || filters.country || filters.city);
+  const hasFilters = Boolean(filters.source || filters.country || filters.city || filters.q);
   const showSkeleton = loadingProfile && recommendations === null;
   const isEmpty = profileReady && !showSkeleton && allEvents.length === 0;
   const healthySources = syncStatus?.lastResult?.sources.filter((source) => source.count > 0 && !source.error).length ?? 0;
@@ -516,7 +526,18 @@ export default function App() {
             ) : null}
           </section>
 
-          <div className="chat-column">
+          <div className={`chat-column${chatDrawerOpen ? ' chat-column-open' : ''}`}>
+            <div className="chat-drawer-header">
+              <div className="chat-drawer-handle" aria-hidden="true" />
+              <button
+                type="button"
+                className="chat-drawer-close"
+                onClick={() => setChatDrawerOpen(false)}
+                aria-label="Cerrar chat"
+              >
+                ✕
+              </button>
+            </div>
             <ChatPanel
               profile={profile}
               message={chatMessage}
@@ -526,10 +547,31 @@ export default function App() {
               response={chatResponse}
               error={chatError}
               rateLimit={chatRateLimit}
-              onOpenEvent={openEventAndRemember}
+              onOpenEvent={(id) => {
+                setChatDrawerOpen(false);
+                openEventAndRemember(id);
+              }}
               loginRequired={chatLoginRequired}
             />
           </div>
+
+          {chatDrawerOpen ? (
+            <button
+              type="button"
+              className="chat-backdrop"
+              onClick={() => setChatDrawerOpen(false)}
+              aria-label="Cerrar chat"
+            />
+          ) : null}
+
+          <button
+            type="button"
+            className={`chat-fab${chatDrawerOpen ? ' chat-fab-hidden' : ''}`}
+            onClick={() => setChatDrawerOpen(true)}
+            aria-label="Abrir chat con IA"
+          >
+            <span aria-hidden="true">✨</span> Pregúntale a la IA
+          </button>
         </main>
       )}
     </div>
