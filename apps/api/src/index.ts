@@ -1,6 +1,8 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from 'express';
+import { closeDb } from './db/client.js';
+import { runMigrations } from './db/migrate.js';
 import { buildRecommendationContext, enrichEvent, filterByInterpretation, generateChatAnswer, parseChatInterpretation, rankEvents } from './lib/ranking.js';
 import { normalizeText } from './lib/text.js';
 import { eventRepository } from './repositories/event.repository.js';
@@ -120,6 +122,12 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 void bootstrap();
 
 async function bootstrap() {
+	try {
+		await runMigrations();
+	} catch (error) {
+		console.error('[api] migraciones fallaron:', error instanceof Error ? error.message : error);
+	}
+
 	await eventRepository.init();
 
 	syncEvents().catch((error) => {
@@ -134,9 +142,19 @@ async function bootstrap() {
 		}, syncIntervalMinutes * 60 * 1000);
 	}
 
-	app.listen(port, () => {
+	const server = app.listen(port, () => {
 		console.log(`Tech Radar LATAM API running on http://localhost:${port}`);
 	});
+
+	const shutdown = async (signal: string) => {
+		console.log(`[api] received ${signal}, closing…`);
+		server.close();
+		await closeDb();
+		process.exit(0);
+	};
+
+	process.on('SIGTERM', () => void shutdown('SIGTERM'));
+	process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
 function asyncHandler(handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler {
