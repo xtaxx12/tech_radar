@@ -24,6 +24,7 @@ const emptyFilters: EventFilters = { source: '', country: '', city: '' };
 export default function App() {
   const { user, favorites, rsvp, config: authConfig, toggleFavorite, toggleRsvp } = useAuth();
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
+  const [savedProfile, setSavedProfile] = useState<UserProfile>(loadProfile);
   const [options, setOptions] = useState<ProfileOptions | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<RankedEvent | null>(null);
@@ -173,8 +174,21 @@ export default function App() {
   }, [profile, profileReady, filters, reloadKey]);
 
   const saveProfile = () => {
+    setSavedProfile(profile);
     setProfileReady(true);
   };
+
+  const cancelEdit = () => {
+    setProfile(savedProfile);
+    setProfileReady(true);
+  };
+
+  const openEditor = () => {
+    setSavedProfile(profile);
+    setProfileReady(false);
+  };
+
+  const profileHasChanges = !sameProfile(profile, savedProfile);
 
   const handleRetrySync = () => {
     setTriggeringSync(true);
@@ -281,29 +295,56 @@ export default function App() {
       </header>
 
       {!profileReady ? (
-        <main className="hero-grid">
-          <section className="hero-copy panel">
-            <div className="eyebrow">LATAM events intelligence</div>
-            <h1>Un radar de eventos tech que entiende tu perfil y te explica el porqué.</h1>
-            <p>
-              Tech Radar LATAM combina recomendaciones personalizadas, ranking inteligente y chat conversacional para descubrir eventos en Ecuador,
-              México, Perú y el resto de la región.
-            </p>
-            <div className="metric-row">
-              <Metric value={totalEvents ? `${totalEvents}` : '—'} label="eventos analizados" />
-              <Metric value={`${countriesCovered}`} label="países cubiertos" />
-              <Metric value="IA" label="resumen y chat" />
+        recommendations !== null ? (
+          <main className="edit-shell">
+            <div className="edit-topbar">
+              <button className="back-chip" type="button" onClick={cancelEdit}>
+                <span aria-hidden="true">←</span>
+                <span>Volver al radar</span>
+              </button>
+              <div className="breadcrumb" aria-label="Ruta">
+                <span>Radar</span>
+                <span aria-hidden="true">/</span>
+                <span className="breadcrumb-current">Editar perfil</span>
+              </div>
             </div>
-          </section>
+            <ProfileForm
+              profile={profile}
+              options={options}
+              onChange={setProfile}
+              onSubmit={saveProfile}
+              submitting={loadingProfile}
+              mode="edit"
+              onCancel={cancelEdit}
+              hasChanges={profileHasChanges}
+            />
+          </main>
+        ) : (
+          <main className="hero-grid">
+            <section className="hero-copy panel">
+              <div className="eyebrow">LATAM events intelligence</div>
+              <h1>Un radar de eventos tech que entiende tu perfil y te explica el porqué.</h1>
+              <p>
+                Tech Radar LATAM combina recomendaciones personalizadas, ranking inteligente y chat conversacional para descubrir eventos en Ecuador,
+                México, Perú y el resto de la región.
+              </p>
+              <div className="metric-row">
+                <Metric value={totalEvents ? `${totalEvents}` : '—'} label="eventos analizados" />
+                <Metric value={`${countriesCovered}`} label="países cubiertos" />
+                <Metric value="IA" label="resumen y chat" />
+              </div>
+            </section>
 
-          <ProfileForm
-            profile={profile}
-            options={options}
-            onChange={setProfile}
-            onSubmit={saveProfile}
-            submitting={loadingProfile}
-          />
-        </main>
+            <ProfileForm
+              profile={profile}
+              options={options}
+              onChange={setProfile}
+              onSubmit={saveProfile}
+              submitting={loadingProfile}
+              mode="onboarding"
+            />
+          </main>
+        )
       ) : (
         <main className="dashboard-grid">
           <aside className="panel sidebar-panel">
@@ -314,7 +355,7 @@ export default function App() {
               <ProfileField label="Nivel" value={profile.level} />
               <ProfileField label="Intereses" value={profile.interests.join(', ') || '—'} />
             </div>
-            <button className="secondary-button" type="button" onClick={() => setProfileReady(false)}>
+            <button className="secondary-button" type="button" onClick={openEditor}>
               Editar perfil
             </button>
 
@@ -510,6 +551,16 @@ function ProfileField({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function sameProfile(a: UserProfile, b: UserProfile): boolean {
+  if (a.country !== b.country) return false;
+  if (a.role !== b.role) return false;
+  if (a.level !== b.level) return false;
+  if (a.interests.length !== b.interests.length) return false;
+  const sortedA = [...a.interests].sort();
+  const sortedB = [...b.interests].sort();
+  return sortedA.every((value, index) => value === sortedB[index]);
 }
 
 function loadProfile(): UserProfile {

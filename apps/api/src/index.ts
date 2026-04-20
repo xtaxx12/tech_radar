@@ -74,7 +74,7 @@ app.post('/auth/google', asyncHandler(async (request, response) => {
 	const token = signSession({ userId: user.id });
 	setSessionCookie(response, token);
 
-	response.json({ user: toPublicUser(user) });
+	response.json({ user: toPublicUser(user), token });
 }));
 
 app.post('/auth/logout', (_request, response) => {

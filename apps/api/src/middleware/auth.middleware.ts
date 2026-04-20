@@ -8,10 +8,21 @@ declare module 'express-serve-static-core' {
   }
 }
 
+function readBearerToken(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (!header || typeof header !== 'string') return null;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+function readAuthToken(req: Request): string | null {
+  return readSessionCookie(req.cookies) ?? readBearerToken(req);
+}
+
 export const optionalAuth: RequestHandler = async (req, _res, next) => {
   if (!isAuthEnabled()) return next();
 
-  const token = readSessionCookie(req.cookies);
+  const token = readAuthToken(req);
   if (!token) return next();
 
   const session = verifySession(token);
@@ -35,7 +46,7 @@ export const requireAuth: RequestHandler = async (req: Request, res: Response, n
     return;
   }
 
-  const token = readSessionCookie(req.cookies);
+  const token = readAuthToken(req);
   const session = token ? verifySession(token) : null;
 
   if (!session) {

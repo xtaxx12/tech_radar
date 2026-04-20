@@ -426,6 +426,48 @@ h3 {
   align-items: stretch;
 }
 
+.edit-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-5);
+  position: relative;
+  z-index: 1;
+}
+
+.edit-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.preset-row {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(157, 177, 204, 0.12);
+}
+
+.profile-form-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-5);
+}
+
+.profile-form-actions .primary-button,
+.profile-form-actions .secondary-button {
+  margin-top: 0;
+}
+
+.profile-form-actions .primary-button {
+  flex: 1;
+  min-width: 180px;
+}
+
 .hero-copy,
 .onboarding-panel,
 .sidebar-panel,

@@ -1,4 +1,4 @@
-import type { ProfileOptions, UserProfile } from '../types';
+import type { Level, ProfileOptions, Role, UserProfile } from '../types';
 
 type Props = {
   profile: UserProfile;
@@ -6,6 +6,9 @@ type Props = {
   onChange: (nextProfile: UserProfile) => void;
   onSubmit: () => void;
   submitting: boolean;
+  mode?: 'onboarding' | 'edit';
+  onCancel?: () => void;
+  hasChanges?: boolean;
 };
 
 const roleLabels: Record<string, string> = {
@@ -20,7 +23,24 @@ const roleLabels: Record<string, string> = {
   product: 'Product'
 };
 
-export function ProfileForm({ profile, options, onChange, onSubmit, submitting }: Props) {
+type Preset = {
+  label: string;
+  description: string;
+  role: Role;
+  level: Level;
+  interests: string[];
+};
+
+const PRESETS: Preset[] = [
+  { label: 'IA para junior', description: 'Data + aprendizaje de IA', role: 'data', level: 'junior', interests: ['ia'] },
+  { label: 'Frontend senior', description: 'Web avanzado y performance', role: 'frontend', level: 'senior', interests: ['web', 'performance'] },
+  { label: 'DevOps cloud', description: 'Cloud, CI/CD, infra', role: 'devops', level: 'mid', interests: ['cloud', 'ia'] },
+  { label: 'Product & UX', description: 'Producto, diseño, UX', role: 'product', level: 'mid', interests: ['ux', 'product'] }
+];
+
+export function ProfileForm({ profile, options, onChange, onSubmit, submitting, mode = 'onboarding', onCancel, hasChanges = true }: Props) {
+  const isEditing = mode === 'edit';
+
   const toggleInterest = (interest: string) => {
     const nextInterests = profile.interests.includes(interest)
       ? profile.interests.filter((item) => item !== interest)
@@ -29,11 +49,51 @@ export function ProfileForm({ profile, options, onChange, onSubmit, submitting }
     onChange({ ...profile, interests: nextInterests });
   };
 
+  const applyPreset = (preset: Preset) => {
+    onChange({
+      ...profile,
+      role: preset.role,
+      level: preset.level,
+      interests: preset.interests
+    });
+  };
+
+  const activePreset = PRESETS.find((preset) => isPresetActive(preset, profile));
+
   return (
     <section className="panel onboarding-panel">
-      <div className="eyebrow">Onboarding</div>
-      <h2>Cuéntanos quién eres y te mostramos eventos que sí importan.</h2>
-      <p className="muted">Selecciona tu país, rol, nivel e intereses. El radar usa estos datos para priorizar eventos y explicar cada recomendación.</p>
+      <div className="eyebrow">{isEditing ? 'Editar perfil' : 'Onboarding'}</div>
+      <h2>
+        {isEditing
+          ? 'Ajusta tu perfil y actualizamos el radar.'
+          : 'Cuéntanos quién eres y te mostramos eventos que sí importan.'}
+      </h2>
+      <p className="muted">
+        {isEditing
+          ? 'Los cambios se guardan localmente y las recomendaciones se reordenan al instante.'
+          : 'Selecciona tu país, rol, nivel e intereses. El radar usa estos datos para priorizar eventos y explicar cada recomendación.'}
+      </p>
+
+      <div className="preset-row">
+        <div className="filter-label">Perfil sugerido</div>
+        <div className="prompt-pills">
+          {PRESETS.map((preset) => {
+            const active = activePreset?.label === preset.label;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                className={active ? 'prompt-pill prompt-pill-active' : 'prompt-pill'}
+                onClick={() => applyPreset(preset)}
+                aria-pressed={active}
+                title={preset.description}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="form-grid">
         <label>
@@ -85,9 +145,29 @@ export function ProfileForm({ profile, options, onChange, onSubmit, submitting }
         </div>
       </div>
 
-      <button className="primary-button" type="button" onClick={onSubmit} disabled={submitting}>
-        {submitting ? 'Cargando radar...' : 'Explorar mi radar'}
-      </button>
+      <div className="profile-form-actions">
+        {isEditing && onCancel ? (
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            Cancelar
+          </button>
+        ) : null}
+        <button
+          className="primary-button"
+          type="button"
+          onClick={onSubmit}
+          disabled={submitting || (isEditing && !hasChanges)}
+        >
+          {submitting ? 'Cargando radar...' : isEditing ? (hasChanges ? 'Guardar cambios' : 'Sin cambios') : 'Explorar mi radar'}
+        </button>
+      </div>
     </section>
   );
+}
+
+function isPresetActive(preset: Preset, profile: UserProfile): boolean {
+  if (profile.role !== preset.role || profile.level !== preset.level) return false;
+  if (profile.interests.length !== preset.interests.length) return false;
+  const sorted = [...profile.interests].sort();
+  const target = [...preset.interests].sort();
+  return sorted.every((value, index) => value === target[index]);
 }
