@@ -43,6 +43,20 @@ export default function Login() {
   });
 
   useEffect(() => {
+    if (!request) return;
+    console.log('[login] authorize request', {
+      url: request.url,
+      redirectUri: request.redirectUri,
+      clientId: request.clientId,
+      codeChallenge: request.codeChallenge,
+      codeChallengeMethod: request.codeChallengeMethod,
+      codeVerifierPrefix: request.codeVerifier?.slice(0, 10),
+      codeVerifierLength: request.codeVerifier?.length,
+      responseType: request.responseType
+    });
+  }, [request]);
+
+  useEffect(() => {
     if (!response) return;
 
     if (response.type === 'cancel' || response.type === 'dismiss') {

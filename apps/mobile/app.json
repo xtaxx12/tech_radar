@@ -9,16 +9,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.techradar.mobile",
-      "infoPlist": {
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.590581546649-mshegutfvl85pt67i9s8kgi6pt1e9qrp"
-            ]
-          }
-        ]
-      }
+      "bundleIdentifier": "com.techradar.mobile"
     },
     "android": {
       "package": "com.techradar.mobile"
@@ -28,7 +19,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.590581546649-mshegutfvl85pt67i9s8kgi6pt1e9qrp"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
