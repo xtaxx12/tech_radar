@@ -5,6 +5,12 @@ import { formatLongDate } from '../utils';
 type Props = {
   event: RankedEvent;
   onBack: () => void;
+  isFavorite?: boolean;
+  isGoing?: boolean;
+  canInteract?: boolean;
+  authEnabled?: boolean;
+  onToggleFavorite?: () => void;
+  onToggleRsvp?: () => void;
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -14,7 +20,16 @@ const SOURCE_LABELS: Record<string, string> = {
   community: 'Comunidad'
 };
 
-export function EventDetail({ event, onBack }: Props) {
+export function EventDetail({
+  event,
+  onBack,
+  isFavorite = false,
+  isGoing = false,
+  canInteract = false,
+  authEnabled = false,
+  onToggleFavorite,
+  onToggleRsvp
+}: Props) {
   const [copied, setCopied] = useState(false);
 
   const reasons = event.reasons?.length ? event.reasons : ['No hay razones detalladas para este evento todavía.'];
@@ -85,7 +100,37 @@ export function EventDetail({ event, onBack }: Props) {
             </div>
             <h1>{event.title}</h1>
             {event.summary ? <p className="detail-summary">{event.summary}</p> : null}
-            {countdown ? <div className={`countdown-chip countdown-${countdown.tone}`}>{countdown.label}</div> : null}
+            <div className="detail-chip-row">
+              {countdown ? <div className={`countdown-chip countdown-${countdown.tone}`}>{countdown.label}</div> : null}
+              {authEnabled ? (
+                <>
+                  <button
+                    type="button"
+                    className={isFavorite ? 'interaction-chip interaction-chip-active' : 'interaction-chip'}
+                    onClick={onToggleFavorite}
+                    disabled={!canInteract}
+                    aria-pressed={isFavorite}
+                    aria-label={isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+                    title={canInteract ? '' : 'Inicia sesión para guardar favoritos'}
+                  >
+                    <span aria-hidden="true">{isFavorite ? '♥' : '♡'}</span>
+                    <span>{isFavorite ? 'Guardado' : 'Guardar'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={isGoing ? 'interaction-chip interaction-chip-active' : 'interaction-chip'}
+                    onClick={onToggleRsvp}
+                    disabled={!canInteract}
+                    aria-pressed={isGoing}
+                    aria-label={isGoing ? 'Cancelar asistencia' : 'Marcar que asistirás'}
+                    title={canInteract ? '' : 'Inicia sesión para marcar asistencia'}
+                  >
+                    <span aria-hidden="true">{isGoing ? '✓' : '→'}</span>
+                    <span>{isGoing ? 'Asistiré' : 'Asistir'}</span>
+                  </button>
+                </>
+              ) : null}
+            </div>
           </div>
           <div className="detail-score-card">
             <span className="detail-score-label">Score</span>

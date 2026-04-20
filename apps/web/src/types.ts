@@ -83,6 +83,31 @@ export interface SyncStatus {
   lastResult: SyncResultPayload | null;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+  picture: string | null;
+}
+
+export interface AuthConfig {
+  enabled: boolean;
+  googleClientId: string | null;
+}
+
+export interface UserFavorites {
+  favorites: string[];
+  rsvp: string[];
+}
+
+export type UserEventInteractionType = 'favorite' | 'rsvp';
+
+export interface ToggleInteractionResponse {
+  eventId: string;
+  type: UserEventInteractionType;
+  active: boolean;
+}
+
 export interface ChatResponse {
   interpretation: {
     country?: string;

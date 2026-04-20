@@ -72,9 +72,25 @@ PG_POOL_MAX=10
 # SSL: true para proveedores cloud (Neon, Supabase, Render). false para localhost.
 PG_SSL=false
 
-# Auth (pendiente de implementar)
+# Auth con Google Identity Services
+# 1. Crea un OAuth 2.0 Client ID en https://console.cloud.google.com/apis/credentials
+#    tipo "Aplicación web" con Authorized JavaScript origins:
+#      http://localhost:5173
+#      (y tu dominio público cuando despliegues)
+# 2. Pega el Client ID aquí y en apps/web/.env como VITE_GOOGLE_CLIENT_ID
+# 3. Genera un secreto: openssl rand -base64 48
+# Si ambas variables quedan vacías, la API sigue funcionando sin auth
+# (el chat IA queda abierto y no hay favoritos).
 GOOGLE_CLIENT_ID=
 AUTH_SESSION_SECRET=
+# Cookie de sesión. Para desarrollo local dejar en blanco.
+# En producción con dominios distintos (web y api):
+#   AUTH_COOKIE_SAMESITE=none
+#   AUTH_COOKIE_SECURE=true
+#   AUTH_COOKIE_DOMAIN=.tudominio.com
+AUTH_COOKIE_SAMESITE=lax
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_DOMAIN=
 
 # IA local opcional (Ollama)
 USE_OLLAMA=false
@@ -92,6 +108,8 @@ GEMINI_MODEL=gemini-1.5-flash
 
 ```bash
 VITE_API_URL=http://localhost:4000
+# Mismo Client ID que GOOGLE_CLIENT_ID del backend. Déjalo vacío si aún no configuraste OAuth.
+VITE_GOOGLE_CLIENT_ID=
 ```
 
 ## Instalación
@@ -126,6 +144,12 @@ Sincronización manual de fuentes (además de la sincronización periódica).
 
 - `GET /events/:id`
 Detalle de evento por id.
+
+- `GET /auth/config`, `POST /auth/google`, `POST /auth/logout`, `GET /auth/me`
+Autenticación con Google Identity Services. Devuelve cookie httpOnly firmada (JWT de 7 días).
+
+- `GET /me/favorites`, `POST /me/events/:id/favorite`, `POST /me/events/:id/rsvp`
+Requieren sesión iniciada. `toggle` de favoritos y RSVP ("asistiré").
 
 ## Sincronización
 

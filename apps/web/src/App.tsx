@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { getChatResponse, getEventDetail, getProfileOptions, getRecommendations, getSyncStatus, triggerSync } from './api';
+import { ApiError, getChatResponse, getEventDetail, getProfileOptions, getRecommendations, getSyncStatus, triggerSync } from './api';
+import { useAuth } from './auth/AuthContext';
+import { GoogleSignIn } from './auth/GoogleSignIn';
+import { UserMenu } from './auth/UserMenu';
 import { ChatPanel } from './components/ChatPanel';
 import { EventCard } from './components/EventCard';
 import { EventCardSkeletonGrid } from './components/EventCardSkeleton';
@@ -19,6 +22,7 @@ const defaultProfile: UserProfile = {
 const emptyFilters: EventFilters = { source: '', country: '', city: '' };
 
 export default function App() {
+  const { user, favorites, rsvp, config: authConfig, toggleFavorite, toggleRsvp } = useAuth();
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
   const [options, setOptions] = useState<ProfileOptions | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
@@ -192,12 +196,18 @@ export default function App() {
     getChatResponse(chatMessage, profile)
       .then((data) => setChatResponse(data))
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Ocurrió un error consultando la IA.';
-        setChatError(message);
+        if (error instanceof ApiError && error.status === 401) {
+          setChatError('Inicia sesión con Google para usar el chat IA.');
+        } else {
+          const message = error instanceof Error ? error.message : 'Ocurrió un error consultando la IA.';
+          setChatError(message);
+        }
         setChatResponse(null);
       })
       .finally(() => setLoadingChat(false));
   };
+
+  const chatLoginRequired = Boolean(authConfig?.enabled) && !user;
 
   const topEvents = recommendations?.recommendations ?? [];
   const allEvents = recommendations?.events ?? [];
@@ -224,7 +234,18 @@ export default function App() {
   }
 
   if (selectedEvent) {
-    return <EventDetail event={selectedEvent} onBack={handleBackToRadar} />;
+    return (
+      <EventDetail
+        event={selectedEvent}
+        onBack={handleBackToRadar}
+        isFavorite={favorites.has(selectedEvent.id)}
+        isGoing={rsvp.has(selectedEvent.id)}
+        canInteract={Boolean(user)}
+        authEnabled={Boolean(authConfig?.enabled)}
+        onToggleFavorite={user ? () => void toggleFavorite(selectedEvent.id) : undefined}
+        onToggleRsvp={user ? () => void toggleRsvp(selectedEvent.id) : undefined}
+      />
+    );
   }
 
   const countriesCovered = new Set(
@@ -245,14 +266,17 @@ export default function App() {
           <div className="brand">Tech Radar LATAM</div>
           <p className="muted">Descubre eventos tecnológicos relevantes con IA y datos de Meetup, Eventbrite y GDG.</p>
         </div>
-        <div
-          className={`status-pill ${totalSources > 0 && healthySources === 0 ? 'status-pill-warn' : ''}`}
-          aria-label="Estado de las fuentes de datos"
-        >
-          <span className="status-dot" aria-hidden="true" />
-          {totalSources > 0
-            ? `${healthySources}/${totalSources} fuentes activas`
-            : 'Conectando fuentes…'}
+        <div className="topbar-actions">
+          <div
+            className={`status-pill ${totalSources > 0 && healthySources === 0 ? 'status-pill-warn' : ''}`}
+            aria-label="Estado de las fuentes de datos"
+          >
+            <span className="status-dot" aria-hidden="true" />
+            {totalSources > 0
+              ? `${healthySources}/${totalSources} fuentes activas`
+              : 'Conectando fuentes…'}
+          </div>
+          {authConfig?.enabled ? (user ? <UserMenu /> : <GoogleSignIn compact />) : null}
         </div>
       </header>
 
@@ -360,6 +384,9 @@ export default function App() {
                     event={event}
                     featured={index === 0}
                     onOpen={() => openEventAndRemember(event.id)}
+                    favorite={favorites.has(event.id)}
+                    canFavorite={Boolean(user)}
+                    onToggleFavorite={user ? () => void toggleFavorite(event.id) : undefined}
                   />
                 ))}
               </section>
@@ -417,6 +444,7 @@ export default function App() {
               response={chatResponse}
               error={chatError}
               onOpenEvent={openEventAndRemember}
+              loginRequired={chatLoginRequired}
             />
           </div>
         </main>

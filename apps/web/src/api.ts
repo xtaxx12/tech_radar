@@ -1,9 +1,33 @@
-import type { ChatResponse, EventDetailResponse, ProfileOptions, RecommendationsResponse, SyncStatus, UserProfile } from './types';
+import type {
+  AuthConfig,
+  AuthUser,
+  ChatResponse,
+  EventDetailResponse,
+  ProfileOptions,
+  RecommendationsResponse,
+  SyncStatus,
+  ToggleInteractionResponse,
+  UserEventInteractionType,
+  UserFavorites,
+  UserProfile
+} from './types';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
+    credentials: 'include',
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -12,8 +36,21 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    let message = `Request failed: ${response.status}`;
+    let code: string | undefined;
+    try {
+      const text = await response.text();
+      try {
+        const parsed = JSON.parse(text) as { error?: string; message?: string };
+        code = parsed.error;
+        message = parsed.message ?? parsed.error ?? text ?? message;
+      } catch {
+        message = text || message;
+      }
+    } catch {
+      // ignore
+    }
+    throw new ApiError(response.status, message, code);
   }
 
   return response.json() as Promise<T>;
@@ -61,4 +98,33 @@ export function getSyncStatus(): Promise<SyncStatus> {
 
 export function triggerSync(): Promise<{ ok: boolean; result: SyncStatus['lastResult'] }> {
   return requestJson('/sync', { method: 'POST' });
+}
+
+export function getAuthConfig(): Promise<AuthConfig> {
+  return requestJson<AuthConfig>('/auth/config');
+}
+
+export function getMe(): Promise<{ user: AuthUser }> {
+  return requestJson<{ user: AuthUser }>('/auth/me');
+}
+
+export function loginWithGoogle(credential: string): Promise<{ user: AuthUser }> {
+  return requestJson<{ user: AuthUser }>('/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ credential })
+  });
+}
+
+export function logout(): Promise<{ ok: boolean }> {
+  return requestJson<{ ok: boolean }>('/auth/logout', { method: 'POST' });
+}
+
+export function getMyInteractions(): Promise<UserFavorites> {
+  return requestJson<UserFavorites>('/me/favorites');
+}
+
+export function toggleInteraction(eventId: string, type: UserEventInteractionType): Promise<ToggleInteractionResponse> {
+  return requestJson<ToggleInteractionResponse>(`/me/events/${encodeURIComponent(eventId)}/${type === 'favorite' ? 'favorite' : 'rsvp'}`, {
+    method: 'POST'
+  });
 }

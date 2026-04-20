@@ -9,6 +9,7 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
