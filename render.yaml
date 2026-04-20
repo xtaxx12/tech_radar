@@ -2,6 +2,12 @@
 # Importalo una vez desde el dashboard de Render ("New → Blueprint") y crea
 # el servicio `tech-radar-api`. Las variables marcadas con `sync: false`
 # tenés que completarlas vos en el dashboard (Render no las guarda en git).
+#
+# IMPORTANTE: NO usamos `rootDir: apps/api`. Es un monorepo npm workspaces
+# y el package.json raíz es donde viven los workspaces; si Render hace
+# `cd apps/api` antes de `npm install`, falla con "No workspaces found".
+# Los comandos corren desde la raíz del repo y apuntan al workspace
+# correcto con `--workspace apps/api`.
 
 services:
   - type: web
@@ -9,8 +15,7 @@ services:
     runtime: node
     plan: free
     region: oregon                       # cámbialo si querés más cerca de LATAM
-    rootDir: apps/api
-    buildCommand: npm install --workspaces --include-workspace-root && npm run build --workspace apps/api
+    buildCommand: npm install && npm run build --workspace apps/api
     startCommand: npm run start --workspace apps/api
     healthCheckPath: /health
     autoDeploy: true
