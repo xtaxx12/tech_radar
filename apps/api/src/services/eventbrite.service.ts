@@ -2,47 +2,26 @@ import { eventbriteFallbackEvents } from '../data/fallback-events.js';
 import { normalizeText } from '../lib/text.js';
 import type { SourceFetchResult, TechEvent } from '../types.js';
 
-const EVENTBRITE_ENDPOINT = 'https://www.eventbriteapi.com/v3/events/search/';
+const EVENTBRITE_SEARCH_PAGE = 'https://www.eventbrite.com/d/online/technology--events/';
 
 type EventbriteEvent = {
   id?: string;
-  name?: { text?: string };
-  description?: { text?: string };
+  name?: string;
+  description?: string;
   url?: string;
   start?: { local?: string; utc?: string };
-  venue?: {
-    address?: {
-      city?: string;
-      country?: string;
-      localized_area_display?: string;
-    };
-  };
-  category?: { short_name?: string };
+  location?: { name?: string };
+  image?: string;
+  image_url?: string;
+  eventAttendanceMode?: string;
 };
 
 export async function fetchEventbriteEvents(): Promise<SourceFetchResult> {
-  const apiKey = process.env.EVENTBRITE_API_KEY?.trim();
-
-  if (!apiKey) {
-    return {
-      source: 'eventbrite',
-      events: eventbriteFallbackEvents,
-      usedFallback: true,
-      error: 'EVENTBRITE_API_KEY no configurada'
-    };
-  }
-
-  const url = new URL(EVENTBRITE_ENDPOINT);
-  url.searchParams.set('q', 'technology OR software OR AI');
-  url.searchParams.set('location.address', 'Latin America');
-  url.searchParams.set('expand', 'venue,category');
-  url.searchParams.set('sort_by', 'date');
-
   try {
-    const response = await fetch(url, {
+    const response = await fetch(EVENTBRITE_SEARCH_PAGE, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
 
@@ -50,15 +29,15 @@ export async function fetchEventbriteEvents(): Promise<SourceFetchResult> {
       throw new Error(`Eventbrite status ${response.status}`);
     }
 
-    const data = (await response.json()) as { events?: EventbriteEvent[] };
-    const mapped = (data.events ?? []).map((event) => mapEventbriteEvent(event)).filter(Boolean) as TechEvent[];
+    const html = await response.text();
+    const mapped = extractEventbriteEvents(html).map((event) => mapEventbriteEvent(event)).filter(Boolean) as TechEvent[];
 
     if (mapped.length === 0) {
       return {
         source: 'eventbrite',
         events: eventbriteFallbackEvents,
         usedFallback: true,
-        error: 'Eventbrite devolvio 0 eventos transformables'
+        error: 'Eventbrite devolvio 0 eventos transformables desde la pagina publica'
       };
     }
 
@@ -77,8 +56,44 @@ export async function fetchEventbriteEvents(): Promise<SourceFetchResult> {
   }
 }
 
+function extractEventbriteEvents(html: string): EventbriteEvent[] {
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+  const events: EventbriteEvent[] = [];
+
+  for (const block of blocks) {
+    try {
+      const parsed = JSON.parse(block) as unknown;
+      const itemList = Array.isArray(parsed) ? parsed : [parsed];
+
+      for (const entry of itemList) {
+        const record = entry as { itemListElement?: Array<{ item?: { name?: string; description?: string; url?: string; startDate?: string; location?: { name?: string } } }> };
+        const elements = record?.itemListElement ?? [];
+        for (const element of elements) {
+          const item = element?.item;
+          if (!item?.name || !item?.url) {
+            continue;
+          }
+
+          events.push({
+            id: item.url.split('-tickets-').pop(),
+            name: item.name,
+            description: item.description,
+            url: item.url,
+            start: { local: item.startDate },
+            location: item.location
+          });
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return events;
+}
+
 function mapEventbriteEvent(event: EventbriteEvent): TechEvent | null {
-  const title = event.name?.text?.trim();
+  const title = event.name?.trim();
   const url = event.url?.trim();
 
   if (!title || !url) {
@@ -86,36 +101,25 @@ function mapEventbriteEvent(event: EventbriteEvent): TechEvent | null {
   }
 
   const nowIso = new Date().toISOString();
+  const description = event.description?.trim() || 'Evento publicado en Eventbrite.';
 
   return {
     id: `eventbrite-${event.id ?? hashId(url)}`,
     title,
-    description: event.description?.text?.trim() || 'Evento publicado en Eventbrite.',
+    description,
     date: event.start?.local || event.start?.utc || nowIso,
-    country: normalizeCountry(event.venue?.address?.country),
-    city: event.venue?.address?.city?.trim() || event.venue?.address?.localized_area_display?.trim() || 'Latam',
+    country: 'Latam',
+    city: event.location?.name?.trim() || 'Latam',
     source: 'eventbrite',
     url,
     link: url,
-    tags: deriveTags(`${title} ${event.description?.text ?? ''} ${event.category?.short_name ?? ''}`),
+    tags: deriveTags(`${title} ${description}`),
     level: 'all',
     summary: '',
     createdAt: nowIso,
     updatedAt: nowIso,
     raw: event
   };
-}
-
-function normalizeCountry(value?: string): string {
-  const normalized = normalizeText(value ?? '');
-  if (normalized === 'mx') return 'México';
-  if (normalized === 'ec') return 'Ecuador';
-  if (normalized === 'pe') return 'Perú';
-  if (normalized === 'co') return 'Colombia';
-  if (normalized === 'cl') return 'Chile';
-  if (normalized === 'ar') return 'Argentina';
-  if (normalized === 'br') return 'Brasil';
-  return value?.trim() || 'Latam';
 }
 
 function deriveTags(input: string): string[] {
