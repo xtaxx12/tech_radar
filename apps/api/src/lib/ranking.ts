@@ -21,7 +21,7 @@ const ROLE_KEYWORDS: Record<string, UserProfile['role']> = {
   pm: 'product'
 };
 
-const LEVEL_KEYWORDS: Record<string, Level> = {
+const LEVEL_KEYWORDS: Record<string, UserProfile['level']> = {
   junior: 'junior',
   trainee: 'junior',
   mid: 'mid',
@@ -69,7 +69,7 @@ export function enrichEvent(event: TechEvent, profile: UserProfile): RankedEvent
     reasons.push(`Ocurre en ${event.country}, el país seleccionado.`);
   }
 
-  if (event.audience.map(normalizeText).includes(profileRole) || eventTags.includes(profileRole)) {
+  if (eventTags.includes(profileRole)) {
     score += 18;
     reasons.push(`El contenido encaja con tu rol de ${profile.role}.`);
   }
@@ -144,7 +144,8 @@ function labelForScore(score: number): string {
   return 'Descubrir';
 }
 
-function levelMatch(profileLevel: Level, eventLevel: Level): boolean {
+function levelMatch(profileLevel: UserProfile['level'], eventLevel: Level): boolean {
+  if (eventLevel === 'all') return true;
   if (profileLevel === eventLevel) return true;
 
   if (profileLevel === 'senior' && eventLevel !== 'junior') return true;
@@ -154,12 +155,15 @@ function levelMatch(profileLevel: Level, eventLevel: Level): boolean {
 }
 
 function buildSummary(event: TechEvent): string {
-  const audienceText = event.audience.length ? event.audience.join(', ') : 'profesionales tech';
-  return `${event.title} trata sobre ${event.tags.slice(0, 3).join(', ')}. Nivel ${event.level}. Dirigido a ${audienceText}.`;
+  if (event.summary?.trim()) {
+    return event.summary;
+  }
+
+  return `${event.title} trata sobre ${event.tags.slice(0, 3).join(', ')}. Nivel ${event.level}.`; 
 }
 
 function daysUntil(dateIso: string): number {
-  const now = new Date('2026-04-19T12:00:00-05:00');
+  const now = new Date();
   const eventDate = new Date(dateIso);
   const diff = eventDate.getTime() - now.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -192,7 +196,7 @@ export function parseChatInterpretation(message: string): ChatInterpretation {
 }
 
 export function filterByInterpretation(events: TechEvent[], interpretation: ChatInterpretation): TechEvent[] {
-  const today = new Date('2026-04-19T12:00:00-05:00');
+  const today = new Date();
 
   return events.filter((event) => {
     const eventDate = new Date(event.date);

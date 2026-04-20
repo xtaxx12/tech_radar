@@ -9,31 +9,37 @@ export type Role =
   | 'devops'
   | 'product';
 
-export type Level = 'junior' | 'mid' | 'senior';
+export type Level = 'junior' | 'mid' | 'senior' | 'all';
 
-export type EventSource = 'meetup' | 'eventbrite' | 'gdg' | 'community';
+export type EventSource = 'meetup' | 'eventbrite' | 'gdg';
 
-export interface UserProfile {
-  country: string;
-  role: Role;
-  level: Level;
-  interests: string[];
-}
-
-export interface TechEvent {
+export interface UnifiedEvent {
   id: string;
   title: string;
   description: string;
   date: string;
-  city: string;
   country: string;
-  link: string;
+  city: string;
   source: EventSource;
+  url: string;
+  link?: string;
   tags: string[];
   level: Level;
-  audience: string[];
+  summary: string;
   trending?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  raw?: unknown;
 }
+
+export interface UserProfile {
+  country: string;
+  role: Role;
+  level: Exclude<Level, 'all'>;
+  interests: string[];
+}
+
+export type TechEvent = UnifiedEvent;
 
 export interface RankedEvent extends TechEvent {
   score: number;
@@ -43,10 +49,32 @@ export interface RankedEvent extends TechEvent {
   badges: string[];
 }
 
+export interface SourceFetchResult {
+  source: EventSource;
+  events: TechEvent[];
+  usedFallback: boolean;
+  error?: string;
+}
+
+export interface SyncResult {
+  fetched: number;
+  cleaned: number;
+  deduped: number;
+  saved: number;
+  startedAt: string;
+  finishedAt: string;
+  sources: Array<{
+    source: EventSource;
+    count: number;
+    usedFallback: boolean;
+    error?: string;
+  }>;
+}
+
 export interface ChatInterpretation {
   country?: string;
   role?: Role;
-  level?: Level;
+  level?: Exclude<Level, 'all'>;
   interests: string[];
   timeWindowDays: number;
   originalMessage: string;

@@ -1,9 +1,15 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const OLLAMA_URL = process.env.OLLAMA_BASE_URL?.trim() || 'http://localhost:11434';
 
 export async function generateText(prompt: string): Promise<string> {
+  const ollamaModel = process.env.OLLAMA_MODEL?.trim();
   const openAiKey = process.env.OPENAI_API_KEY?.trim();
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
+
+  if (ollamaModel || process.env.USE_OLLAMA === 'true') {
+    return callOllama(prompt, ollamaModel || 'qwen2.5:7b-instruct');
+  }
 
   if (openAiKey) {
     return callOpenAI(prompt, openAiKey, process.env.OPENAI_MODEL ?? 'gpt-4o-mini');
@@ -69,6 +75,34 @@ async function callGemini(prompt: string, apiKey: string, model: string): Promis
   };
 
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || fallbackText(prompt);
+}
+
+async function callOllama(prompt: string, model: string): Promise<string> {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: false,
+        options: {
+          temperature: 0.2
+        }
+      })
+    });
+
+    if (!response.ok) {
+      return fallbackText(prompt);
+    }
+
+    const data = await response.json() as { response?: string };
+    return data.response?.trim() || fallbackText(prompt);
+  } catch {
+    return fallbackText(prompt);
+  }
 }
 
 function fallbackText(prompt: string): string {
