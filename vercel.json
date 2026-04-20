@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm install --workspaces --include-workspace-root && npm run build --workspace apps/web",
-  "outputDirectory": "dist",
-  "installCommand": "echo skip (buildCommand already installs)",
   "framework": null,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace apps/web",
+  "outputDirectory": "apps/web/dist",
   "rewrites": [
     {
       "source": "/((?!assets/).*)",
