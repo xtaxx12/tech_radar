@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanEvents, dedupeEvents } from './event-processing.js';
+import { cleanEvents, dedupeEvents, enrichEventsWithAI } from './event-processing.js';
 import type { TechEvent } from '../types.js';
 
 function makeEvent(overrides: Partial<TechEvent> = {}): TechEvent {
@@ -139,5 +139,69 @@ describe('dedupeEvents', () => {
   it('returns the input unchanged when there is nothing to merge', () => {
     const out = dedupeEvents([]);
     expect(out).toEqual([]);
+  });
+});
+
+describe('enrichEventsWithAI — heuristic summary (no AI keys configured)', () => {
+  it('never echoes the title in the summary', async () => {
+    const events = cleanEvents([
+      makeEvent({
+        id: 'evt-title-echo',
+        title: 'Build With AI - LAN PARTY en USFQ',
+        description: 'Evento de GDG Quito.', // boilerplate — no útil
+        tags: ['ia']
+      })
+    ]);
+
+    const [enriched] = await enrichEventsWithAI(events);
+    expect(enriched.summary).toBeTruthy();
+    expect(enriched.summary).not.toContain(enriched.title);
+    expect(enriched.summary.toLowerCase()).not.toContain('usfq');
+  });
+
+  it('uses the first sentence of a real description when available', async () => {
+    const events = cleanEvents([
+      makeEvent({
+        id: 'evt-with-desc',
+        title: 'Cloud Run Day Bogotá',
+        description: 'Un día completo para aprender a deployar contenedores sin servidores en Google Cloud Run, con sesiones hands-on y speakers de la región. Incluye networking y sorteos al final.',
+        tags: ['cloud']
+      })
+    ]);
+
+    const [enriched] = await enrichEventsWithAI(events);
+    expect(enriched.summary.length).toBeGreaterThan(30);
+    expect(enriched.summary.toLowerCase()).toContain('deployar');
+    expect(enriched.summary.toLowerCase()).not.toContain('sorteos');
+  });
+
+  it('infers the format when the title mentions "Workshop", "Hackathon", etc.', async () => {
+    const workshop = cleanEvents([
+      makeEvent({ id: 'w', title: 'Workshop Gemini API para principiantes', description: 'Evento de GDG Quito.', tags: ['ia'] })
+    ]);
+    const hackathon = cleanEvents([
+      makeEvent({ id: 'h', title: 'DevFest Hackathon Ecuador', description: '', tags: ['ia', 'cloud'] })
+    ]);
+
+    const [workshopOut] = await enrichEventsWithAI(workshop);
+    const [hackathonOut] = await enrichEventsWithAI(hackathon);
+
+    expect(workshopOut.summary).toMatch(/^Workshop/);
+    expect(hackathonOut.summary).toMatch(/^Hackathon/);
+  });
+
+  it('skips source boilerplate like "Evento de GDG X." and builds its own summary', async () => {
+    const events = cleanEvents([
+      makeEvent({
+        id: 'evt-boilerplate',
+        title: 'Build With AI - LAN PARTY en USFQ',
+        description: 'Evento de GDG Quito.',
+        tags: ['ia']
+      })
+    ]);
+
+    const [enriched] = await enrichEventsWithAI(events);
+    expect(enriched.summary.toLowerCase()).not.toBe('evento de gdg quito.');
+    expect(enriched.summary).toMatch(/LAN party|inteligencia artificial/i);
   });
 });
