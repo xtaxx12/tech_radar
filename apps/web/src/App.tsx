@@ -431,21 +431,88 @@ export default function App() {
       ) : (
         <main className="dashboard-grid">
           <aside className="panel sidebar-panel">
-            <div className="eyebrow">Estás viendo</div>
-            <h2>{profile.country}</h2>
-            <div className="profile-stack">
-              <ProfileField label="Rol" value={profile.role} />
-              <ProfileField label="Nivel" value={profile.level} />
-              <ProfileField label="Intereses" value={profile.interests.join(', ') || '—'} />
+            <div className="profile-card">
+              <div className="profile-card-header">
+                <div className="eyebrow">Estás viendo</div>
+                <h2>
+                  <span className="profile-country-flag" aria-hidden="true"><IconLocation /></span>
+                  {profile.country}
+                </h2>
+              </div>
+
+              <dl className="profile-stack">
+                <div className="profile-row">
+                  <dt>
+                    <span className="profile-row-icon" aria-hidden="true"><IconRole /></span>
+                    Rol
+                  </dt>
+                  <dd>
+                    <span className="profile-chip profile-chip-role">{formatRole(profile.role)}</span>
+                  </dd>
+                </div>
+
+                <div className="profile-row">
+                  <dt>
+                    <span className="profile-row-icon" aria-hidden="true"><IconLevel /></span>
+                    Nivel
+                  </dt>
+                  <dd>
+                    <span className={`level-badge level-badge-${profile.level}`}>
+                      <span className="level-badge-dot" aria-hidden="true" />
+                      {profile.level}
+                    </span>
+                  </dd>
+                </div>
+
+                <div className="profile-row profile-row-interests">
+                  <dt>
+                    <span className="profile-row-icon" aria-hidden="true"><IconSpark /></span>
+                    Intereses
+                  </dt>
+                  <dd>
+                    {profile.interests.length > 0 ? (
+                      <div className="interest-chip-list">
+                        {profile.interests.map((interest) => (
+                          <span key={interest} className="interest-chip">#{interest}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="muted">Sin intereses guardados</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+
+              {user ? (
+                <div className="profile-engagement" aria-label="Tus interacciones">
+                  <div>
+                    <strong>{favorites.size}</strong>
+                    <span>Favoritos</span>
+                  </div>
+                  <div className="profile-engagement-divider" aria-hidden="true" />
+                  <div>
+                    <strong>{rsvp.size}</strong>
+                    <span>Asistiré</span>
+                  </div>
+                </div>
+              ) : null}
+
+              <button className="secondary-button profile-edit-btn" type="button" onClick={openEditor}>
+                <IconPencil />
+                <span>Editar perfil</span>
+              </button>
             </div>
-            <button className="secondary-button" type="button" onClick={openEditor}>
-              Editar perfil
-            </button>
 
             <div className="insight-card">
               <div className="insight-label">Resumen del radar</div>
-              <div className="insight-value">{totalEvents} eventos analizados</div>
-              <div className="insight-note">{trendingCount} marcados como Trending</div>
+              <div className="insight-value">
+                <strong>{totalEvents}</strong>
+                <span>eventos analizados</span>
+              </div>
+              <div className="insight-note">
+                <span className="insight-dot" aria-hidden="true" />
+                {trendingCount} marcados como Trending
+              </div>
             </div>
           </aside>
 
@@ -666,6 +733,65 @@ function ProfileField({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  frontend: 'Frontend',
+  backend: 'Backend',
+  fullstack: 'Fullstack',
+  data: 'Data',
+  design: 'Diseño',
+  founder: 'Founder',
+  mobile: 'Mobile',
+  devops: 'DevOps',
+  product: 'Product'
+};
+
+function formatRole(role: string): string {
+  return ROLE_LABELS[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function IconLocation() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s-7-7.5-7-12a7 7 0 1 1 14 0c0 4.5-7 12-7 12z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+function IconRole() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="7" width="18" height="14" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+function IconLevel() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20v-6M12 20V8M20 20V4" />
+    </svg>
+  );
+}
+
+function IconSpark() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+    </svg>
+  );
+}
+
+function IconPencil() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+      <path d="M14 6l4 4" />
+    </svg>
   );
 }
 
