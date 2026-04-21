@@ -181,11 +181,17 @@ function levelMatch(profileLevel: UserProfile['level'], eventLevel: Level): bool
 }
 
 function buildSummary(event: TechEvent): string {
-  if (event.summary?.trim()) {
-    return event.summary;
-  }
+  const provided = event.summary?.trim();
+  if (provided) return provided;
 
-  return `${event.title} trata sobre ${event.tags.slice(0, 3).join(', ')}. Nivel ${event.level}.`; 
+  // Fallback defensivo: event-processing debería haber llenado `summary`
+  // siempre vía inferFromHeuristics, pero si llega un evento "crudo" (p. ej.
+  // memoria volátil o tests), al menos no echamos el título encima.
+  const tags = event.tags.filter((tag) => tag !== 'tech').slice(0, 2);
+  if (tags.length > 0) {
+    return `Encuentro tech sobre ${tags.join(' y ')} con la comunidad local.`;
+  }
+  return 'Encuentro de la comunidad tech de la región.';
 }
 
 function daysUntil(dateIso: string): number {

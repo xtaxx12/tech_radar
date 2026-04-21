@@ -29,8 +29,12 @@ services:
         value: production
       - key: PORT
         value: 4000
+      # Cada 6h en prod: con skip-already-enriched el costo de IA ya es
+      # bajísimo, pero sincronizar menos seguido multiplica el ahorro. La
+      # UI escucha SSE así que los usuarios ven los eventos nuevos apenas
+      # termina un sync — la frecuencia no afecta la frescura percibida.
       - key: SYNC_INTERVAL_MINUTES
-        value: 60
+        value: 360
       # Cookie cross-site: web en Vercel (*.vercel.app) y api en Render (*.onrender.com)
       - key: AUTH_COOKIE_SAMESITE
         value: none
