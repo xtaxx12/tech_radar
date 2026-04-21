@@ -15,7 +15,10 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tech-radar-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://tech-radar-api.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "590581546649-66b40o9f0cs77a1tk6j6dvltvtrornbo.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "590581546649-mshegutfvl85pt67i9s8kgi6pt1e9qrp.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "590581546649-10v94e1eh2tcou5cct91432l8t3sdc7h.apps.googleusercontent.com"
       },
       "android": {
         "buildType": "apk"
@@ -27,7 +30,10 @@
     "production": {
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tech-radar-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://tech-radar-api.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "590581546649-66b40o9f0cs77a1tk6j6dvltvtrornbo.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "590581546649-mshegutfvl85pt67i9s8kgi6pt1e9qrp.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "590581546649-10v94e1eh2tcou5cct91432l8t3sdc7h.apps.googleusercontent.com"
       },
       "autoIncrement": true
     }
