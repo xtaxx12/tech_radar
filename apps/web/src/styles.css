@@ -2446,7 +2446,10 @@ a:focus-visible {
   display: none;
 }
 
-@media (max-width: 1180px) {
+/* Desktop apretado / laptops ~1200px: colapsamos a 1 columna y el chat se
+   vuelve drawer con FAB. Con 1180 el chat-column de 380px + sidebar de 320px
+   no dejaba suficiente ancho al content column. */
+@media (max-width: 1280px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
@@ -2459,17 +2462,16 @@ a:focus-visible {
   .events-grid {
     grid-template-columns: 1fr;
   }
-}
 
-/* En móvil, el chat-column se convierte en bottom sheet */
-@media (max-width: 900px) {
+  /* Drawer empieza a activarse ya en tablets, no solo móviles. */
   .chat-column {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
+    height: 85vh;
+    height: 85dvh;                   /* iOS: sobre barra inferior real */
     max-height: 85vh;
-    overflow-y: auto;
     overscroll-behavior: contain;
     z-index: 60;
     background: var(--bg, #0b1020);
@@ -2477,21 +2479,54 @@ a:focus-visible {
     border-top-right-radius: 28px;
     border-top: 1px solid rgba(157, 177, 204, 0.15);
     box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.6);
-    padding: var(--space-3) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+    padding: var(--space-3) var(--space-5) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
     transform: translateY(100%);
     transition: transform 260ms var(--ease-out);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
   .chat-column.chat-column-open {
     transform: translateY(0);
   }
 
+  /* El chat-panel pasa a llenar todo el drawer en vez de limitarse al viewport.
+     Sin esto, el `minmax(0, 1fr)` interno colapsa y la conversación se pierde. */
+  .chat-column .chat-panel {
+    height: auto;
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-radius: 0;
+    gap: var(--space-3);
+  }
+
+  .chat-column .chat-header h2 {
+    font-size: 1.05rem;
+  }
+
+  /* No permitir al user agrandar el textarea fuera del drawer. */
+  .chat-column .chat-composer textarea {
+    resize: none;
+    min-height: 56px;
+  }
+
+  /* Header del drawer (handle + botón cerrar) — solo se muestra cuando el
+     chat es bottom-sheet. */
   .chat-drawer-header {
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     padding: var(--space-2) 0 var(--space-3);
+    flex-shrink: 0;
   }
 
   .chat-drawer-handle {
@@ -2516,7 +2551,7 @@ a:focus-visible {
   }
 
   .chat-drawer-close:hover {
-    color: var(--text-primary, #fff);
+    color: var(--text, #fff);
     background: rgba(255, 255, 255, 0.08);
   }
 
@@ -2543,13 +2578,13 @@ a:focus-visible {
     bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
     z-index: 50;
     padding: 14px 22px;
-    background: linear-gradient(135deg, var(--accent) 0%, #a4b8ff 100%);
-    color: #0b1020;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-soft) 100%);
+    color: #041117;
     font-weight: 700;
     font-size: 0.95rem;
     border: none;
     border-radius: 999px;
-    box-shadow: 0 12px 32px rgba(124, 156, 255, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 12px 32px rgba(113, 227, 199, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     cursor: pointer;
     transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out), opacity 160ms var(--ease-out);
   }
@@ -2557,13 +2592,29 @@ a:focus-visible {
   .chat-fab:hover,
   .chat-fab:focus-visible {
     transform: translateY(-2px);
-    box-shadow: 0 16px 40px rgba(124, 156, 255, 0.55), 0 2px 10px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 16px 40px rgba(113, 227, 199, 0.5), 0 2px 10px rgba(0, 0, 0, 0.35);
   }
 
   .chat-fab-hidden {
     opacity: 0;
     pointer-events: none;
     transform: translateY(20px);
+  }
+}
+
+/* Ajustes específicos de teléfono pequeño */
+@media (max-width: 900px) {
+  .chat-column {
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-fab {
+    padding: 12px 18px;
+    font-size: 0.88rem;
+  }
+
+  .chat-column .chat-header h2 {
+    font-size: 1rem;
   }
 }
 
