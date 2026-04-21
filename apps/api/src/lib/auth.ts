@@ -83,7 +83,8 @@ export async function verifyGoogleIdToken(idToken: string): Promise<TokenPayload
 
 export async function exchangeGoogleCode(params: {
   code: string;
-  codeVerifier: string;
+  /** Opcional: cuando el cliente usa PKCE (mobile). El Web Client del popup no lo manda. */
+  codeVerifier?: string;
   redirectUri: string;
   clientId?: string;
 }): Promise<TokenPayload> {
@@ -105,9 +106,12 @@ export async function exchangeGoogleCode(params: {
     code: params.code,
     client_id: clientId,
     redirect_uri: params.redirectUri,
-    grant_type: 'authorization_code',
-    code_verifier: params.codeVerifier
+    grant_type: 'authorization_code'
   };
+
+  if (params.codeVerifier) {
+    form.code_verifier = params.codeVerifier;
+  }
 
   if (isWebClient) {
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -115,6 +119,9 @@ export async function exchangeGoogleCode(params: {
       throw new Error('Falta GOOGLE_CLIENT_SECRET para el Web Client.');
     }
     form.client_secret = clientSecret;
+  } else if (!params.codeVerifier) {
+    // Native clients (iOS / Android) usan PKCE: sin verifier no pueden hacer exchange.
+    throw new Error('codeVerifier es obligatorio para clients nativos (PKCE).');
   }
 
   console.log('[auth] exchange →', {

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, getAuthConfig, getMe, getMyInteractions, loginWithGoogle, logout as apiLogout, toggleInteraction } from '../api';
+import { ApiError, getAuthConfig, getMe, getMyInteractions, loginWithGoogle, loginWithGoogleCode, logout as apiLogout, toggleInteraction } from '../api';
 import type { AuthConfig, AuthUser, UserEventInteractionType } from '../types';
 
 type AuthContextValue = {
@@ -9,6 +9,7 @@ type AuthContextValue = {
   rsvp: Set<string>;
   status: 'loading' | 'ready';
   loginWithCredential: (credential: string) => Promise<void>;
+  loginWithCode: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   toggleFavorite: (eventId: string) => Promise<void>;
   toggleRsvp: (eventId: string) => Promise<void>;
@@ -89,6 +90,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadInteractions]);
 
+  const loginWithCode = useCallback(async (code: string) => {
+    setError(null);
+    try {
+      const { user: nextUser } = await loginWithGoogleCode(code);
+      setUser(nextUser);
+      await loadInteractions();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No pudimos iniciar sesión con Google.';
+      setError(message);
+      throw err;
+    }
+  }, [loadInteractions]);
+
   const logout = useCallback(async () => {
     try {
       await apiLogout();
@@ -135,11 +149,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     rsvp,
     status,
     loginWithCredential,
+    loginWithCode,
     logout,
     toggleFavorite: (eventId: string) => toggle(eventId, 'favorite'),
     toggleRsvp: (eventId: string) => toggle(eventId, 'rsvp'),
     error
-  }), [config, user, favorites, rsvp, status, loginWithCredential, logout, toggle, error]);
+  }), [config, user, favorites, rsvp, status, loginWithCredential, loginWithCode, logout, toggle, error]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
