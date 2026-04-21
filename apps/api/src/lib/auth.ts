@@ -114,9 +114,20 @@ export async function exchangeGoogleCode(params: {
   }
 
   if (isWebClient) {
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+    const rawSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const clientSecret = rawSecret?.trim();
     if (!clientSecret) {
       throw new Error('Falta GOOGLE_CLIENT_SECRET para el Web Client.');
+    }
+    // Diagnóstico defensivo: secrets mal copiados (con espacios, newlines,
+    // o rotados en Google Cloud sin actualizar en el host) son la causa más
+    // común de `invalid_client`. Logueamos la huella para ver si el secret
+    // real tiene algo raro sin exponerlo.
+    if (clientSecret !== rawSecret) {
+      console.warn('[auth] GOOGLE_CLIENT_SECRET tenía whitespace que fue trimeado. Revisá la env var.');
+    }
+    if (!clientSecret.startsWith('GOCSPX-')) {
+      console.warn(`[auth] GOOGLE_CLIENT_SECRET no empieza con "GOCSPX-" (valor visto: "${clientSecret.slice(0, 4)}..."). Probablemente está mal copiado.`);
     }
     form.client_secret = clientSecret;
   } else if (!params.codeVerifier) {
@@ -129,6 +140,8 @@ export async function exchangeGoogleCode(params: {
     isWebClient,
     redirect_uri: params.redirectUri,
     has_secret: Boolean(form.client_secret),
+    secret_prefix: form.client_secret ? form.client_secret.slice(0, 10) : null,
+    secret_length: form.client_secret?.length ?? 0,
     code_prefix: params.code.slice(0, 20) + '...'
   });
 
@@ -141,7 +154,21 @@ export async function exchangeGoogleCode(params: {
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
     console.error('[auth] Google token exchange rechazado', response.status, errText);
-    throw new Error(`Google rechazó el intercambio (${response.status}): ${errText}`);
+
+    // Mapea los errores más comunes de Google a un mensaje accionable.
+    let hint = '';
+    try {
+      const errJson = JSON.parse(errText) as { error?: string };
+      if (errJson.error === 'invalid_client') {
+        hint = ' → El CLIENT_SECRET en el server no matchea el CLIENT_ID. Verificá que ambos provengan del MISMO OAuth Client en Google Cloud Console y que el secret no haya sido rotado.';
+      } else if (errJson.error === 'invalid_grant') {
+        hint = ' → El código expiró o ya fue usado. Intentá el login otra vez.';
+      } else if (errJson.error === 'redirect_uri_mismatch') {
+        hint = ' → El redirect_uri del exchange no está autorizado en Google Cloud Console.';
+      }
+    } catch { /* ignore */ }
+
+    throw new Error(`Google rechazó el intercambio (${response.status}): ${errText}${hint}`);
   }
 
   const data = (await response.json()) as { id_token?: string; access_token?: string };
