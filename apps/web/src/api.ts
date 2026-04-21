@@ -123,6 +123,13 @@ export function loginWithGoogle(credential: string): Promise<{ user: AuthUser }>
   });
 }
 
+export function loginWithGoogleCode(code: string): Promise<{ user: AuthUser }> {
+  return requestJson<{ user: AuthUser }>('/auth/google/code', {
+    method: 'POST',
+    body: JSON.stringify({ code })
+  });
+}
+
 export function logout(): Promise<{ ok: boolean }> {
   return requestJson<{ ok: boolean }>('/auth/logout', { method: 'POST' });
 }

@@ -112,6 +112,44 @@ app.post('/auth/google', asyncHandler(async (request, response) => {
 	response.json({ user: toPublicUser(user), token });
 }));
 
+app.post('/auth/google/code', asyncHandler(async (request, response) => {
+	if (!isAuthEnabled()) {
+		response.status(503).json({ error: 'auth_disabled' });
+		return;
+	}
+
+	const code = typeof request.body?.code === 'string' ? request.body.code : '';
+	if (!code) {
+		response.status(400).json({ error: 'missing_code' });
+		return;
+	}
+
+	let payload;
+	try {
+		// Popup flow del Web Client: Google devuelve el `code` al callback del
+		// cliente con redirect_uri=postmessage. El exchange usa client_secret
+		// (no hace falta code_verifier).
+		payload = await exchangeGoogleCode({ code, redirectUri: 'postmessage' });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'exchange falló';
+		console.error('[auth] code exchange failed:', message);
+		response.status(401).json({ error: 'exchange_failed', message });
+		return;
+	}
+
+	const user = await userRepository.upsertFromGoogle({
+		googleSub: payload.sub!,
+		email: payload.email!,
+		name: payload.name ?? null,
+		picture: payload.picture ?? null
+	});
+
+	const token = signSession({ userId: user.id });
+	setSessionCookie(response, token);
+
+	response.json({ user: toPublicUser(user), token });
+}));
+
 app.post('/auth/google/exchange', asyncHandler(async (request, response) => {
 	if (!isAuthEnabled()) {
 		response.status(503).json({ error: 'auth_disabled' });
