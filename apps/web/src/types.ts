@@ -111,6 +111,7 @@ export interface ToggleInteractionResponse {
 export interface ChatResponse {
   interpretation: {
     country?: string;
+    city?: string;
     role?: Role;
     level?: Level;
     interests: string[];

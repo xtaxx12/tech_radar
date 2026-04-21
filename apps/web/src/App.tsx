@@ -276,6 +276,12 @@ export default function App() {
       });
   };
 
+  const handleChatReset = () => {
+    setChatResponse(null);
+    setChatError(null);
+    setChatRateLimit(null);
+  };
+
   const handleChatSubmit = () => {
     setLoadingChat(true);
     setChatError(null);
@@ -642,6 +648,7 @@ export default function App() {
               message={chatMessage}
               onMessageChange={setChatMessage}
               onSubmit={handleChatSubmit}
+              onReset={handleChatReset}
               loading={loadingChat}
               response={chatResponse}
               error={chatError}
