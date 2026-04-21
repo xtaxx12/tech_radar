@@ -1,189 +1,354 @@
 # Tech Radar LATAM
 
-Tech Radar LATAM ahora incluye un backend agregador multi-fuente para eventos reales de Latinoamérica (Meetup/Eventbrite/GDG), con limpieza, deduplicación y enriquecimiento con IA.
+Agregador inteligente de eventos tech de Latinoamérica con recomendaciones personalizadas, chat conversacional con IA y apps web + móvil nativas.
 
-## Estructura
+Fuentes agregadas: **Meetup**, **Eventbrite**, **GDG Chapters**. Cada evento se limpia, dedupea, clasifica por nivel y temática, y recibe un resumen corto con IA. Un motor de ranking pondera país, rol, nivel, intereses y cercanía temporal del usuario.
 
-- `apps/api`: backend Node.js + Express + TypeScript
-- `apps/web`: frontend React + Vite + TypeScript
+**Demo**:
+- Web: `https://tech-radar-latam.vercel.app/`
+- API: `https://tech-radar-api.onrender.com`
+- Móvil: iOS (TestFlight / dev build) · Android (APK vía EAS)
 
-### Backend (`apps/api`) - módulos principales
+---
 
-- `src/services/meetup.service.ts`: integración Meetup API + fallback
-- `src/services/eventbrite.service.ts`: integración Eventbrite API + fallback
-- `src/services/gdg.service.ts`: consumo de endpoints JSON internos/simulados + fallback
-- `src/services/sync.service.ts`: `syncEvents()` para sincronizar fuentes
-- `src/lib/event-processing.ts`: limpieza, dedupe y clasificación/resumen con IA
-- `src/repositories/event.repository.ts`: persistencia PostgreSQL (o memoria si no hay `DATABASE_URL`)
+## 📸 Screenshots
 
-## Requisitos
+### Web — vista desktop
 
-- Node.js 20 o superior
-- npm 10 o superior
-- Docker (para levantar PostgreSQL local)
+![Dashboard con recomendaciones, filtros y chat sticky](docs/images/web-dashboard.png)
 
-## Base de datos local (Docker)
+![Detalle de evento con score, tags y acciones](docs/images/web-event-detail.png)
 
-En la raíz del repo:
+### Web — vista mobile (chat drawer)
 
-```bash
-docker compose up -d            # levanta postgres en :5434 (host)
-docker compose ps               # verifica que esté "healthy"
-docker compose logs -f postgres # para ver logs
-docker compose down             # detener (los datos persisten en el volumen)
-docker compose down -v          # detener y borrar datos
+<p align="center">
+  <img src="docs/images/mobile-home.png" alt="Home responsive en móvil" width="260"/>
+  <img src="docs/images/web-mobile-chat.png" alt="Chat drawer abierto desde el FAB" width="260"/>
+</p>
+
+### Móvil — iOS
+
+<p align="center">
+  <img src="docs/images/mobile-login.png" alt="Login con Google Sign-In nativo" width="220"/>
+  <img src="docs/images/mobile-home.png" alt="Radar con featured card + score" width="220"/>
+  <img src="docs/images/mobile-detail.png" alt="Detalle de evento con share y RSVP" width="220"/>
+  <img src="docs/images/mobile-favorites.png" alt="Pestaña de favoritos" width="220"/>
+</p>
+
+### Móvil — chat IA con historial
+
+<p align="center">
+  <img src="docs/images/mobile-chat-empty.png" alt="Chat con sugerencias rápidas" width="260"/>
+  <img src="docs/images/mobile-chat-history.png" alt="Conversación con eventos relacionados" width="260"/>
+</p>
+
+---
+
+## ✨ Features
+
+### Descubrir y filtrar
+- **Búsqueda de texto** libre sobre título, descripción, tags, ciudad.
+- **Filtros**: país, ciudad, fuente, favoritos-only.
+- **Recomendaciones rankeadas** (score 0-100) con razones explicadas.
+- **Live sync** vía SSE: el feed se actualiza sólo cuando el backend termina una sync.
+
+### IA
+- **Chat conversacional**: "Eventos de IA esta semana en Ecuador para junior" → filtra y explica.
+- **Clasificación automática** de nivel, tags y resumen por evento.
+- **Multi-provider** con fallback automático: Ollama (local), OpenAI, Gemini.
+- **Circuit breaker**: después de 3 fallas consecutivas, el provider queda fuera 60s para no saturar.
+
+### Cuenta y persistencia
+- **Google Sign-In**: cookie httpOnly en web (JWT 7 días), Bearer token en móvil.
+- **Favoritos y RSVP** persistidos por usuario en Postgres.
+- **Perfil editable** (país, rol, nivel, intereses) para personalizar recomendaciones.
+
+### Cross-platform
+- **Web** responsive mobile-first con bottom-sheet drawer para el chat.
+- **Móvil nativo** iOS + Android con expo-router, haptics, animaciones (Reanimated), Inter font.
+- **Monorepo**: tipos compartidos entre web y móvil.
+
+---
+
+## 🧱 Stack
+
+| Capa | Stack |
+|---|---|
+| Backend | Node.js 20 · Express · TypeScript · Drizzle ORM · PostgreSQL |
+| Web | React 19 · Vite 6 · TypeScript · CSS vanilla (mobile-first) |
+| Móvil | Expo SDK 54 · expo-router 6 · React Native 0.81 · Reanimated 4 |
+| Auth | Google Identity Services (web) · `@react-native-google-signin` (iOS/Android) |
+| IA | Ollama local (Qwen 2.5 7B) · OpenAI gpt-4o-mini · Gemini 1.5 |
+| Realtime | Server-Sent Events |
+| DB local | Postgres 16 en Docker |
+| Deploy | Render (API + DB) · Vercel (Web) · EAS (Móvil) |
+
+---
+
+## 🗂 Estructura
+
+```
+tech-radar/
+├── apps/
+│   ├── api/          # Express + Drizzle + sincronización multi-fuente
+│   ├── web/          # React 19 + Vite
+│   └── mobile/       # Expo 54 + expo-router
+├── docs/             # DEPLOY.md, OVERVIEW.md, PRESENTATION.md, images/
+├── docker-compose.yml
+└── package.json      # workspaces
 ```
 
-El contenedor crea la base `tech_radar_latam` con usuario `postgres` / clave `postgres`. El host usa `5434` para no chocar con un Postgres local (Homebrew/Postgres.app) que suele ocupar `5432`; dentro del contenedor sigue siendo `5432`. El `DATABASE_URL` por defecto de `apps/api/.env.example` ya apunta a `localhost:5434`.
+Módulos principales del backend:
 
-### Migraciones
+| Archivo | Responsabilidad |
+|---|---|
+| `src/services/{meetup,eventbrite,gdg}.service.ts` | Adapters por fuente con fallback |
+| `src/services/sync.service.ts` | Orquesta la sincronización y emite `sync:completed` |
+| `src/lib/event-processing.ts` | Limpia, dedupea y enriquece con IA |
+| `src/lib/ranking.ts` | Score de recomendación + parser de intención del chat |
+| `src/lib/ai.ts` | Chain de providers con circuit breaker |
+| `src/lib/auth.ts` | Verificación de idTokens + PKCE code exchange |
+| `src/repositories/*` | Postgres vía Drizzle (con fallback a memoria sin DATABASE_URL) |
+
+---
+
+## 🚀 Quick start
+
+### Requisitos
+
+- Node.js 20+
+- npm 10+
+- Docker (para Postgres local)
+- Xcode y/o Android Studio (solo si vas a correr la app móvil)
+
+### 1. Clonar e instalar
 
 ```bash
-npm -w apps/api run db:generate   # regenera SQL cuando cambias el schema Drizzle
-npm -w apps/api run db:migrate    # aplica migraciones pendientes (también corre al arrancar la API)
-npm -w apps/api run db:studio     # abre Drizzle Studio (GUI) en el navegador
+git clone <repo>
+cd tech-radar
+npm install        # instala workspaces (api, web, mobile)
 ```
 
-## Variables de entorno
+### 2. Levantar Postgres
 
-Crea estos archivos:
+```bash
+docker compose up -d    # Postgres 16 en host :5434
+```
 
-### `apps/api/.env`
+### 3. Variables de entorno
+
+Copia los ejemplos y rellena:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+cp apps/mobile/.env.example apps/mobile/.env   # si existe, sino crea desde README móvil
+```
+
+Lo mínimo para arrancar (sin auth ni IA):
+
+**`apps/api/.env`**
+```bash
+PORT=4000
+CORS_ORIGIN=http://localhost:5173
+DATABASE_URL=postgres://postgres:postgres@localhost:5434/tech_radar_latam
+```
+
+**`apps/web/.env`**
+```bash
+VITE_API_URL=http://localhost:4000
+```
+
+### 4. Arrancar todo
+
+```bash
+npm run dev        # api (:4000) + web (:5173) en paralelo
+```
+
+### 5. (Opcional) App móvil
+
+```bash
+cd apps/mobile
+npx expo prebuild --clean         # genera ios/ y android/
+npx expo run:ios                  # simulador iOS
+# o: npx expo run:ios --device "<nombre>" para iPhone físico
+# o: npx expo run:android          para Android
+```
+
+Más detalle en [apps/mobile/README.md](apps/mobile/README.md).
+
+---
+
+## 🔐 Variables de entorno completas
+
+<details>
+<summary><strong><code>apps/api/.env</code></strong> (click para expandir)</summary>
 
 ```bash
 PORT=4000
 CORS_ORIGIN=http://localhost:5173
 SYNC_INTERVAL_MINUTES=60
 
-# Fuentes de datos (opcional, si no hay key se usa scraping público)
+# PostgreSQL
+DATABASE_URL=postgres://postgres:postgres@localhost:5434/tech_radar_latam
+PG_POOL_MAX=10
+PG_SSL=false     # true en Neon/Supabase/Render
+
+# Fuentes de datos (opcional)
 MEETUP_API_KEY=
 EVENTBRITE_API_KEY=
 
-# PostgreSQL
-# Formato: postgres://<USER>:<PASSWORD>@<HOST>:<PORT>/<DB>
-# Ejemplos (sustituye los placeholders por tus credenciales reales):
-#   Docker local (matchea docker-compose.yml): postgres://<USER>:<PASSWORD>@localhost:5434/tech_radar_latam
-#   Neon:     postgres://<USER>:<PASSWORD>@ep-xxx.neon.tech/tech_radar_latam?sslmode=require
-#   Supabase: postgres://<USER>:<PASSWORD>@aws-0-xxx.pooler.supabase.com:6543/postgres
-#   Railway:  postgres://<USER>:<PASSWORD>@containers-us-xxx.railway.app:6543/railway
-DATABASE_URL=
-# Pool: ajusta si tu plan tiene pocos slots (ej. Supabase free = 15)
-PG_POOL_MAX=10
-# SSL: true para proveedores cloud (Neon, Supabase, Render). false para localhost.
-PG_SSL=false
+# Auth (Google)
+GOOGLE_CLIENT_ID=            # Web Client ID
+GOOGLE_CLIENT_SECRET=        # solo backend
+GOOGLE_IOS_CLIENT_ID=        # para validar idTokens de la app iOS
+GOOGLE_ANDROID_CLIENT_ID=    # idem para Android
+AUTH_SESSION_SECRET=         # openssl rand -base64 48
 
-# Auth con Google Identity Services
-# 1. Crea un OAuth 2.0 Client ID en https://console.cloud.google.com/apis/credentials
-#    tipo "Aplicación web" con Authorized JavaScript origins:
-#      http://localhost:5173
-#      (y tu dominio público cuando despliegues)
-# 2. Pega el Client ID aquí y en apps/web/.env como VITE_GOOGLE_CLIENT_ID
-# 3. Genera un secreto: openssl rand -base64 48
-# Si ambas variables quedan vacías, la API sigue funcionando sin auth
-# (el chat IA queda abierto y no hay favoritos).
-GOOGLE_CLIENT_ID=
-AUTH_SESSION_SECRET=
-# Cookie de sesión. Para desarrollo local dejar en blanco.
-# En producción con dominios distintos (web y api):
-#   AUTH_COOKIE_SAMESITE=none
-#   AUTH_COOKIE_SECURE=true
-#   AUTH_COOKIE_DOMAIN=.tudominio.com
+# Cookie: en prod con dominios distintos → SAMESITE=none, SECURE=true
 AUTH_COOKIE_SAMESITE=lax
 AUTH_COOKIE_SECURE=false
 AUTH_COOKIE_DOMAIN=
 
-# NODE_ENV decide la preferencia automática de IA:
-#   - development → Ollama local primero, luego OpenAI → Gemini
-#   - production  → OpenAI → Gemini (Ollama local se omite; remoto queda como fallback)
-# Podés forzar manualmente con AI_PROVIDER=ollama|openai|gemini
+# IA — elige proveedor
 NODE_ENV=development
-
-# IA local (Ollama) — preferido en desarrollo si USE_OLLAMA=true
-USE_OLLAMA=false
+AI_PROVIDER=ollama           # ollama | openai | gemini | auto
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b-instruct
-
-# IA cloud — preferidos en producción (se usan en orden y con fallback entre sí)
+OLLAMA_MODEL=qwen2.5:7b
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-1.5-flash
 ```
 
-### `apps/web/.env`
+</details>
+
+<details>
+<summary><strong><code>apps/web/.env</code></strong></summary>
 
 ```bash
 VITE_API_URL=http://localhost:4000
-# Mismo Client ID que GOOGLE_CLIENT_ID del backend. Déjalo vacío si aún no configuraste OAuth.
 VITE_GOOGLE_CLIENT_ID=
 ```
 
-## Instalación
+</details>
+
+<details>
+<summary><strong><code>apps/mobile/.env</code></strong></summary>
 
 ```bash
-npm install
+EXPO_PUBLIC_API_URL=http://localhost:4000
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=    # para verificar idToken en backend
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=    # dev build iOS
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=
 ```
 
-## Desarrollo
+En dispositivo físico, cambia la URL al IP LAN del Mac (`http://192.168.x.x:4000`) o usa un tunnel/la URL pública de Render.
+
+</details>
+
+---
+
+## 🧠 Arquitectura destacada
+
+### Provider chain de IA con circuit breaker
+
+La selección del proveedor se decide por `AI_PROVIDER` + `NODE_ENV`. Cada provider tiene timeout propio (Ollama 45s para CPU local, cloud 15s) y un breaker que lo saca del chain después de 3 fallas consecutivas durante 60s. Ver [apps/api/src/lib/ai.ts](apps/api/src/lib/ai.ts).
+
+### Auth dual (web + móvil)
+
+El mismo endpoint valida tokens emitidos por cualquier Client ID (web, iOS, Android). El middleware acepta cookie httpOnly **o** `Authorization: Bearer`, así web y móvil comparten la misma superficie. Ver [apps/api/src/lib/auth.ts](apps/api/src/lib/auth.ts).
+
+### Live sync con SSE
+
+El backend emite `sync:completed` al terminar cada sincronización. El frontend mantiene un EventSource con reconexión automática; no hace polling innecesario. Ver [apps/api/src/lib/event-bus.ts](apps/api/src/lib/event-bus.ts) y el bloque SSE en [App.tsx](apps/web/src/App.tsx).
+
+### Score de recomendación
+
+Función pura en [ranking.ts](apps/api/src/lib/ranking.ts). Ponderación: país (28), rol (18), nivel (16), intereses (hasta 20), cercanía temporal (hasta 10). Cada razón queda expuesta en `event.reasons` para que la UI muestre el porqué.
+
+### Rate limit del chat
+
+Limiter en memoria por userId (o IP si no hay sesión): **1 req/s y 30 req/hora** en `/chat`. Protege el presupuesto de IA si alguien filtra un token. Ver [rate-limit.middleware.ts](apps/api/src/middleware/rate-limit.middleware.ts).
+
+---
+
+## 📡 Endpoints
+
+### Públicos
+- `GET /health` — health check
+- `GET /events` — lista completa con ranking + filtros (`country`, `role`, `level`, `interests`, `source`, `countryFilter`, `city`, `q`, `limit`)
+- `GET /events/:id` — detalle enriquecido
+- `GET /events/recommended` — top rankeado
+- `GET /events/stream` — Server-Sent Events (`hello`, `sync:completed`)
+- `GET /profile-options` — valores soportados para el perfil
+- `POST /sync` — dispara sincronización manual
+- `GET /sync/status` — último resultado de sync
+
+### Auth
+- `GET /auth/config` — flag de si la auth está habilitada
+- `POST /auth/google` — body `{credential: <idToken>}` (web)
+- `POST /auth/google/exchange` — body `{code, codeVerifier, redirectUri, clientId}` (móvil PKCE)
+- `GET /auth/me` — user actual
+- `POST /auth/logout`
+
+### Protegidos (requieren sesión)
+- `GET /me/favorites`
+- `POST /me/events/:id/favorite` — toggle
+- `POST /me/events/:id/rsvp` — toggle
+- `POST /chat` — body `{message, profile}`
+
+---
+
+## 🚢 Despliegue
+
+Guía paso a paso en **[docs/DEPLOY.md](docs/DEPLOY.md)**:
+
+- **API**: Render con Postgres managed
+- **Web**: Vercel (root = `apps/web`, framework = Vite)
+- **Móvil**: EAS Build → TestFlight (iOS) · APK directo (Android)
+
+Checklist incluye: CORS cross-domain, cookie SameSite=None + Secure, Google OAuth authorized origins, rotación de secrets, cold-start del free tier de Render.
+
+Costo estimado para demo: **$0–7/mes** (free tiers + opcional Render paid para evitar cold starts).
+
+---
+
+## 🧪 Desarrollo
 
 ```bash
-npm run dev
+npm run dev                          # api + web
+npm -w apps/api run lint             # type-check api
+npm -w apps/web run lint             # type-check web
+npm -w apps/mobile run lint          # type-check mobile
+
+# DB
+npm -w apps/api run db:generate      # SQL nuevo al cambiar schema Drizzle
+npm -w apps/api run db:migrate       # aplica migraciones
+npm -w apps/api run db:studio        # GUI de Drizzle
 ```
 
-- Web: `http://localhost:5173`
-- API: `http://localhost:4000`
+---
 
-## Endpoints backend
+## 📚 Docs adicionales
 
-- `GET /events`
-Lista todos los eventos ya sincronizados (con ranking y metadata de recomendación).
+- [docs/OVERVIEW.md](docs/OVERVIEW.md) — visión técnica general
+- [docs/PRESENTATION.md](docs/PRESENTATION.md) — script para demo en vivo
+- [docs/DEPLOY.md](docs/DEPLOY.md) — despliegue paso a paso
+- [apps/mobile/README.md](apps/mobile/README.md) — setup específico móvil (dev build, Google OAuth, etc.)
 
-- `GET /events/recommended`
-Recomendaciones por perfil. Query params:
-`country`, `role`, `level`, `interests`, `limit`
+---
 
-- `POST /chat`
-Consulta en lenguaje natural y devuelve eventos + explicación IA.
+## 🗺️ Roadmap corto
 
-- `POST /sync`
-Sincronización manual de fuentes (además de la sincronización periódica).
+- [x] Skip de enriquecimiento IA para eventos no modificados (reduce costo OpenAI ~30×)
+- [ ] Tab "Mis favoritos" con agrupación por mes
+- [ ] Notificaciones push móvil para eventos con RSVP
+- [ ] Exportar evento a calendario (`.ics`)
+- [ ] Fuentes adicionales: Platzi Live, Devfolio, community Discord bots
 
-- `GET /events/:id`
-Detalle de evento por id.
+---
 
-- `GET /auth/config`, `POST /auth/google`, `POST /auth/logout`, `GET /auth/me`
-Autenticación con Google Identity Services. Devuelve cookie httpOnly firmada (JWT de 7 días).
+## 📝 Licencia
 
-- `GET /me/favorites`, `POST /me/events/:id/favorite`, `POST /me/events/:id/rsvp`
-Requieren sesión iniciada. `toggle` de favoritos y RSVP ("asistiré").
-
-## Sincronización
-
-- Arranque inicial: se ejecuta `syncEvents()` al iniciar la API.
-- Periódica: `SYNC_INTERVAL_MINUTES` (por defecto 60).
-- Manual: `POST /sync`.
-
-Si una API externa falla, cada fuente usa fallback estructurado para mantener el sistema operativo.
-
-## Producción local
-
-```bash
-npm run build
-npm run start
-```
-
-## Desplegar a producción (Neon + Render + Vercel)
-
-Guía paso a paso en **[docs/DEPLOY.md](docs/DEPLOY.md)** — incluye
-`render.yaml` listo, `vercel.json` listo, checklist ordenado, troubleshooting
-y estimación de costos ($0–2/mes).
-
-## Qué incluye
-
-- Integración real con Eventbrite API (si hay `EVENTBRITE_API_KEY`)
-- Integración de Meetup API (si hay `MEETUP_API_KEY`)
-- Integración GDG vía endpoints JSON internos/simulados y fallback seguro
-- Limpieza y deduplicación de eventos multi-fuente
-- Clasificación automática (nivel y temática) + resumen corto con IA
-- Persistencia en PostgreSQL (o memoria si no se configura `DATABASE_URL`)
-- Endpoints de consulta, recomendación y chat IA
+MIT — úsalo, forkealo, haz tu versión para tu país. Si lo extiendes, me encantaría ver el resultado.
