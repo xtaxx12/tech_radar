@@ -1,7 +1,8 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { GoogleSignIn } from '../auth/GoogleSignIn';
-import type { ChatResponse, UserProfile } from '../types';
-import { EventCard } from './EventCard';
+import type { ChatResponse, RankedEvent, UserProfile } from '../types';
+import { formatShortDate } from '../utils';
+import { MarkdownText } from './MarkdownText';
 
 type RateLimitState = {
   scope: 'per_second' | 'per_hour';
@@ -138,7 +139,7 @@ export function ChatPanel({
         {response ? (
           <>
             <ChatBubble role="user" text={response.interpretation.originalMessage} />
-            <ChatBubble role="ai" text={response.answer}>
+            <ChatBubble role="ai">
               {hasFilters(response) ? (
                 <div className="chat-filter-chips" aria-label="Filtros detectados">
                   {filterChips(response).map((chip) => (
@@ -149,13 +150,13 @@ export function ChatPanel({
                   ))}
                 </div>
               ) : null}
+              <MarkdownText text={response.answer} className="chat-bubble-markdown" />
               {response.events.length > 0 ? (
                 <div className="chat-results">
-                  {response.events.slice(0, 3).map((event) => (
-                    <EventCard
+                  {response.events.slice(0, 4).map((event) => (
+                    <ChatEventCard
                       key={event.id}
                       event={event}
-                      compact
                       onOpen={() => onOpenEvent(event.id)}
                     />
                   ))}
@@ -235,6 +236,31 @@ export function ChatPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function ChatEventCard({ event, onOpen }: { event: RankedEvent; onOpen: () => void }) {
+  const isGdg = event.source === 'gdg';
+  return (
+    <button
+      type="button"
+      className="chat-event-card"
+      onClick={onOpen}
+      aria-label={`Abrir ${event.title}`}
+    >
+      <div className="chat-event-card-head">
+        <span className={`chat-event-score ${event.score >= 85 ? 'chat-event-score-hot' : ''}`}>
+          {event.score}
+        </span>
+        <span className="chat-event-title">{event.title}</span>
+      </div>
+      <div className="chat-event-meta">
+        <span>{formatShortDate(event.date)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{event.city}, {event.country}</span>
+        {isGdg ? <span className="chat-event-source">GDG</span> : null}
+      </div>
+    </button>
   );
 }
 
