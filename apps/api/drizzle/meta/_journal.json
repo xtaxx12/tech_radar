@@ -8,6 +8,13 @@
       "when": 1776701376974,
       "tag": "0000_mixed_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776783510331,
+      "tag": "0001_graceful_zuras",
+      "breakpoints": true
     }
   ]
 }

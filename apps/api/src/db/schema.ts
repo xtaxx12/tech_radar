@@ -13,6 +13,7 @@ import {
 
 export const eventSourceEnum = pgEnum('event_source', ['meetup', 'eventbrite', 'gdg', 'community']);
 export const eventLevelEnum = pgEnum('event_level', ['junior', 'mid', 'senior', 'all']);
+export const summarySourceEnum = pgEnum('summary_source', ['ai', 'heuristic']);
 export const userEventTypeEnum = pgEnum('user_event_type', ['favorite', 'rsvp']);
 
 export const events = pgTable(
@@ -30,6 +31,11 @@ export const events = pgTable(
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     level: eventLevelEnum('level').notNull().default('all'),
     summary: text('summary').notNull().default(''),
+    summarySource: summarySourceEnum('summary_source').notNull().default('heuristic'),
+    // sha1(AI_PROMPT_VERSION|title|description).slice(0, 16). Usado para saber
+    // si el contenido del evento cambió desde el último enrichment y poder
+    // skippear la llamada a la IA cuando no cambió nada.
+    contentHash: text('content_hash'),
     trending: boolean('trending').notNull().default(false),
     raw: jsonb('raw'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),

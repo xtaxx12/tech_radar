@@ -13,6 +13,8 @@ export type Level = 'junior' | 'mid' | 'senior' | 'all';
 
 export type EventSource = 'meetup' | 'eventbrite' | 'gdg' | 'community';
 
+export type SummarySource = 'ai' | 'heuristic';
+
 export interface UnifiedEvent {
   id: string;
   title: string;
@@ -26,6 +28,8 @@ export interface UnifiedEvent {
   tags: string[];
   level: Level;
   summary: string;
+  summarySource?: SummarySource;
+  contentHash?: string | null;
   trending?: boolean;
   createdAt: string;
   updatedAt: string;

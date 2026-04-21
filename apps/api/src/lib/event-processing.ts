@@ -1,6 +1,16 @@
+import { createHash } from 'node:crypto';
 import { generateText } from './ai.js';
 import { normalizeText } from './text.js';
-import type { Level, TechEvent } from '../types.js';
+import { buildFetchKey, eventRepository } from '../repositories/event.repository.js';
+import type { Level, SummarySource, TechEvent } from '../types.js';
+
+/**
+ * Versión del prompt de IA. Se incluye en `contentHash` para invalidar
+ * summaries viejos cuando tocamos el prompt en `classifyWithAI`. Cada vez
+ * que cambie algo sustancial (reglas, longitud, formato) se sube este
+ * número y el siguiente sync re-enriquece todos los eventos existentes.
+ */
+export const AI_PROMPT_VERSION = 'v2';
 
 export function cleanEvents(events: TechEvent[]): TechEvent[] {
   return events
@@ -57,25 +67,75 @@ export function dedupeEvents(events: TechEvent[]): TechEvent[] {
 
 const AI_BATCH_SIZE = 6;
 
+/**
+ * Hash corto (16 chars de sha1) que identifica el contenido relevante del
+ * evento para el enrichment. Si ya hay un evento guardado con mismo hash
+ * y `summary_source = 'ai'`, podemos skippear la llamada a la IA.
+ * Se mezcla con `AI_PROMPT_VERSION` para que un cambio de prompt fuerce
+ * re-enrichment aunque el contenido no haya cambiado.
+ */
+export function computeContentHash(title: string, description: string): string {
+  return createHash('sha1')
+    .update(`${AI_PROMPT_VERSION}|${title.trim()}|${description.trim()}`)
+    .digest('hex')
+    .slice(0, 16);
+}
+
+function shouldSkipEnrichment(incoming: TechEvent, existing: TechEvent | undefined, hash: string): boolean {
+  if (!existing) return false;
+  if (existing.summarySource !== 'ai') return false;
+  if (existing.contentHash !== hash) return false;
+  if (!existing.summary?.trim()) return false;
+  return true;
+}
+
 export async function enrichEventsWithAI(events: TechEvent[]): Promise<TechEvent[]> {
+  // Carga en una sola query los eventos ya persistidos para decidir quién
+  // necesita pasar por la IA y quién se puede reusar tal cual.
+  const existingByKey = await eventRepository.getExistingByFetchKey().catch((error) => {
+    console.warn('[ai enrichment] no pude leer eventos existentes, enriqueciendo todo:', error instanceof Error ? error.message : error);
+    return new Map<string, TechEvent>();
+  });
+
   const enriched: TechEvent[] = [];
 
   for (let offset = 0; offset < events.length; offset += AI_BATCH_SIZE) {
     const batch = events.slice(offset, offset + AI_BATCH_SIZE);
-    const results = await Promise.all(batch.map((event) => enrichOne(event)));
+    const results = await Promise.all(batch.map((event) => {
+      const hash = computeContentHash(event.title, event.description ?? '');
+      const existing = existingByKey.get(buildFetchKey(event.source, event.url));
+      return enrichOne(event, hash, existing);
+    }));
     enriched.push(...results);
   }
 
   return enriched;
 }
 
-async function enrichOne(event: TechEvent): Promise<TechEvent> {
+async function enrichOne(event: TechEvent, hash: string, existing: TechEvent | undefined): Promise<TechEvent> {
+  // Skip: el contenido relevante no cambió Y ya tenemos un summary hecho
+  // por la IA. Reutilizamos el enrichment previo y evitamos gastar tokens.
+  if (shouldSkipEnrichment(event, existing, hash)) {
+    return {
+      ...event,
+      tags: existing!.tags,
+      level: existing!.level,
+      summary: existing!.summary,
+      summarySource: existing!.summarySource,
+      contentHash: hash,
+      updatedAt: existing!.updatedAt
+    };
+  }
+
   const inferred = inferFromHeuristics(event);
   const ai = await classifyWithAI(event).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[ai enrichment] failed for ${event.id}: ${message}`);
     return null;
   });
+
+  const usedAi = Boolean(ai && (ai.summary?.trim() || ai.tags?.length));
+  const summarySource: SummarySource = usedAi ? 'ai' : 'heuristic';
 
   const tags = ai?.tags?.length ? normalizeTags(ai.tags) : inferred.tags;
   const level = ai?.level ?? inferred.level;
@@ -86,6 +146,8 @@ async function enrichOne(event: TechEvent): Promise<TechEvent> {
     tags,
     level,
     summary,
+    summarySource,
+    contentHash: hash,
     updatedAt: new Date().toISOString()
   };
 }

@@ -1,7 +1,7 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { events, type EventInsert, type EventRow } from '../db/schema.js';
-import type { TechEvent } from '../types.js';
+import type { SummarySource, TechEvent } from '../types.js';
 
 const MEMORY_STORE_CAP = 5000;
 
@@ -54,6 +54,8 @@ class EventRepository {
           tags: sql`excluded.tags`,
           level: sql`excluded.level`,
           summary: sql`excluded.summary`,
+          summarySource: sql`excluded.summary_source`,
+          contentHash: sql`excluded.content_hash`,
           trending: sql`excluded.trending`,
           raw: sql`excluded.raw`,
           updatedAt: sql`now()`
@@ -86,9 +88,33 @@ class EventRepository {
     const [row] = await db.select().from(events).where(eq(events.id, id)).limit(1);
     return row ? fromRow(row) : null;
   }
+
+  /**
+   * Devuelve un Map con los eventos ya persistidos indexados por la tupla
+   * (source, url) — que es nuestra clave de dedupe. Usado por el enrichment
+   * para saber cuáles eventos ya pasaron por la IA y skippear llamadas.
+   *
+   * Para ~400 eventos totales es más barato cargar todo que armar un `IN`
+   * con cientos de tuplas. Si el dataset crece a 10k+ eventos esto se
+   * vuelve ineficiente y vale la pena filtrar por source/url específicos.
+   */
+  async getExistingByFetchKey(): Promise<Map<string, TechEvent>> {
+    await this.init();
+    const all = await this.getAll();
+    const map = new Map<string, TechEvent>();
+    for (const event of all) {
+      map.set(buildFetchKey(event.source, event.url), event);
+    }
+    return map;
+  }
+}
+
+export function buildFetchKey(source: string, url: string): string {
+  return `${source}|${url}`;
 }
 
 function toInsert(event: TechEvent): EventInsert {
+  const summarySource: SummarySource = event.summarySource ?? 'heuristic';
   return {
     id: event.id,
     title: event.title,
@@ -102,6 +128,8 @@ function toInsert(event: TechEvent): EventInsert {
     tags: event.tags,
     level: event.level,
     summary: event.summary ?? '',
+    summarySource,
+    contentHash: event.contentHash ?? null,
     trending: event.trending ?? false,
     raw: (event.raw ?? null) as EventInsert['raw'],
     createdAt: event.createdAt,
@@ -123,6 +151,8 @@ function fromRow(row: EventRow): TechEvent {
     tags: row.tags,
     level: row.level,
     summary: row.summary,
+    summarySource: row.summarySource,
+    contentHash: row.contentHash ?? null,
     trending: row.trending,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
