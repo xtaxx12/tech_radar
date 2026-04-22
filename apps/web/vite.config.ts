@@ -94,5 +94,29 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false
+  },
+  build: {
+    // Split manual para mejorar cache y reducir el chunk inicial.
+    // - React/ReactDOM quedan en vendor-react (estable, cache larga)
+    // - @react-oauth/google queda aparte (solo lo usás al loguear)
+    // - workbox/pwa en su propio chunk
+    // - el resto de node_modules en "vendor" genérico
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('@react-oauth/google') || id.includes('jwt-decode')) {
+            return 'vendor-google-oauth';
+          }
+          if (id.includes('workbox') || id.includes('vite-plugin-pwa')) {
+            return 'vendor-pwa';
+          }
+          return 'vendor';
+        }
+      }
+    }
   }
 });

@@ -47,13 +47,29 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Tech Radar" />
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts — carga asincrónica para no bloquear el render.
+         El truco media="print" + onload → media="all" hace que el browser
+         descargue el CSS sin bloquear el parse, y lo aplique cuando termine.
+         Se eliminan ~280ms de render-blocking según PageSpeed Insights. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
     />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+      />
+    </noscript>
 
     <!-- Structured Data (Schema.org JSON-LD) — ayuda a Google a entender qué es el sitio -->
     <script type="application/ld+json">
