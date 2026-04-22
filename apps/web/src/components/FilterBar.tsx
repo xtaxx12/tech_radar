@@ -15,12 +15,12 @@ type Props = {
   profileCountry?: string;
 };
 
-const SOURCES: Array<{ value: string; label: string; colorClass?: string }> = [
+const SOURCES: Array<{ value: string; label: string }> = [
   { value: '', label: 'Todas' },
-  { value: 'meetup', label: 'Meetup', colorClass: 'source-meetup' },
-  { value: 'eventbrite', label: 'Eventbrite', colorClass: 'source-eventbrite' },
-  { value: 'gdg', label: 'GDG', colorClass: 'source-gdg' },
-  { value: 'community', label: 'Comunidad', colorClass: 'source-community' }
+  { value: 'meetup', label: 'Meetup' },
+  { value: 'eventbrite', label: 'Eventbrite' },
+  { value: 'gdg', label: 'GDG' },
+  { value: 'community', label: 'Comunidad' }
 ];
 
 export function FilterBar({ filters, onChange, events, profileCountry }: Props) {
@@ -51,41 +51,25 @@ export function FilterBar({ filters, onChange, events, profileCountry }: Props) 
 
   return (
     <div className="filter-bar" role="region" aria-label="Filtros de eventos">
-      <div className="filter-search-wrapper">
-        <div className="filter-search">
-          <span className="filter-search-icon" aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder="Buscar por título, tecnología, ciudad…"
-            aria-label="Buscar eventos"
-            autoComplete="off"
-          />
-          {searchDraft ? (
-            <button
-              type="button"
-              className="filter-search-clear"
-              onClick={() => setSearchDraft('')}
-              aria-label="Limpiar búsqueda"
-            >
-              ✕
-            </button>
-          ) : null}
-        </div>
-        {!searchDraft ? (
-          <div className="search-suggestions" aria-label="Sugerencias de búsqueda">
-            {['Flutter', 'IA', 'React', 'Web', 'Cloud'].map((term) => (
-              <button
-                key={term}
-                type="button"
-                className="search-suggestion-chip"
-                onClick={() => setSearchDraft(term)}
-              >
-                {term}
-              </button>
-            ))}
-          </div>
+      <div className="filter-search">
+        <span className="filter-search-icon" aria-hidden="true">⌕</span>
+        <input
+          type="search"
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
+          placeholder="Buscar por título, tecnología, ciudad…"
+          aria-label="Buscar eventos"
+          autoComplete="off"
+        />
+        {searchDraft ? (
+          <button
+            type="button"
+            className="filter-search-clear"
+            onClick={() => setSearchDraft('')}
+            aria-label="Limpiar búsqueda"
+          >
+            ✕
+          </button>
         ) : null}
       </div>
 
@@ -94,20 +78,14 @@ export function FilterBar({ filters, onChange, events, profileCountry }: Props) 
         <div className="prompt-pills">
           {SOURCES.map((source) => {
             const active = filters.source === source.value;
-            const cls = [
-              'prompt-pill',
-              active ? 'prompt-pill-active' : '',
-              source.colorClass ?? ''
-            ].filter(Boolean).join(' ');
             return (
               <button
                 key={source.value || 'all'}
                 type="button"
-                className={cls}
+                className={active ? 'prompt-pill prompt-pill-active' : 'prompt-pill'}
                 onClick={() => onChange({ ...filters, source: source.value })}
                 aria-pressed={active}
               >
-                <span className="source-dot" aria-hidden="true" />
                 {source.label}
               </button>
             );
