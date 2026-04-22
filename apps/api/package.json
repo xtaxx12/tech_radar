@@ -13,6 +13,9 @@
     "db:studio": "drizzle-kit studio",
     "keys:issue": "tsx scripts/issue-key.ts",
     "keys:list": "tsx scripts/list-keys.ts",
+    "keys:requests": "tsx scripts/list-requests.ts",
+    "keys:approve": "tsx scripts/approve-request.ts",
+    "keys:reject": "tsx scripts/reject-request.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
