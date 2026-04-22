@@ -66,7 +66,14 @@ Fuentes agregadas: **Meetup**, **Eventbrite**, **GDG Chapters**. Cada evento se 
 ### Cross-platform
 - **Web** responsive mobile-first con bottom-sheet drawer para el chat.
 - **Móvil nativo** iOS + Android con expo-router, haptics, animaciones (Reanimated), Inter font.
+- **PWA**: instalable en Android/iOS desde el navegador, funciona offline con cache de eventos (Workbox).
 - **Monorepo**: tipos compartidos entre web y móvil.
+
+### API pública para comunidades
+- **REST read-only** en `/public/v1/*` con **OpenAPI 3.1** spec + docs interactivos vía **Scalar UI**.
+- **Rate limit 1000 req/h** por key, CORS `*` (cualquier dominio puede consumir).
+- **Widget embebible** (`widget.js`) — un `<script>` y cualquier comunidad muestra tus eventos en su sitio.
+- **Flujo de alta**: formulario público en `/api` → notificación a Discord → **magic-link aprobar/rechazar** con 1 click desde el celular → email automático via Resend con la key.
 
 ---
 
@@ -80,6 +87,10 @@ Fuentes agregadas: **Meetup**, **Eventbrite**, **GDG Chapters**. Cada evento se 
 | Auth | Google Identity Services (web) · `@react-native-google-signin` (iOS/Android) |
 | IA | Ollama local (Qwen 2.5 7B) · OpenAI gpt-4o-mini · Gemini 1.5 |
 | Realtime | Server-Sent Events |
+| PWA | vite-plugin-pwa · Workbox (NetworkFirst/StaleWhileRevalidate) |
+| API pública | OpenAPI 3.1 · Scalar UI · API keys hasheadas (SHA-256) |
+| Email | Resend (approval/rejection templates) |
+| Admin | Magic-link firmados (JWT, TTL 72h) desde Discord webhook |
 | DB local | Postgres 16 en Docker |
 | Deploy | Render (API + DB) · Vercel (Web) · EAS (Móvil) |
 
@@ -108,6 +119,12 @@ Módulos principales del backend:
 | `src/lib/ranking.ts` | Score de recomendación + parser de intención del chat |
 | `src/lib/ai.ts` | Chain de providers con circuit breaker |
 | `src/lib/auth.ts` | Verificación de idTokens + PKCE code exchange |
+| `src/lib/admin-tokens.ts` | JWT firmado para magic-links aprobar/rechazar |
+| `src/lib/email.ts` · `notifications.ts` | Resend templates + Discord webhook |
+| `src/routes/public-api.ts` | `/public/v1/*` — read-only para comunidades |
+| `src/routes/public-docs.ts` | OpenAPI spec + Scalar UI en `/public/docs` |
+| `src/routes/key-request.ts` | `POST /public/keys/request` — form de comunidades |
+| `src/routes/admin-magic.ts` | `/admin/approve` · `/admin/reject` magic-links |
 | `src/repositories/*` | Postgres vía Drizzle (con fallback a memoria sin DATABASE_URL) |
 
 ---
@@ -219,6 +236,19 @@ OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-1.5-flash
+
+# API pública — emails para aprobación (Resend, 3000 emails/mes gratis)
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=Tech Radar LATAM <onboarding@resend.dev>
+PUBLIC_DOCS_URL=https://tech-radar-api.onrender.com/public/docs
+
+# Notificación a Discord cuando entra una solicitud (opcional)
+DISCORD_WEBHOOK_URL=
+
+# Magic-link admin (aprobar/rechazar desde Discord). Si no se setea,
+# reutiliza AUTH_SESSION_SECRET. Recomendado tener uno dedicado en prod.
+ADMIN_TOKEN_SECRET=
+API_BASE_URL=https://tech-radar-api.onrender.com
 ```
 
 </details>
@@ -271,6 +301,29 @@ Función pura en [ranking.ts](apps/api/src/lib/ranking.ts). Ponderación: país 
 
 Limiter en memoria por userId (o IP si no hay sesión): **1 req/s y 30 req/hora** en `/chat`. Protege el presupuesto de IA si alguien filtra un token. Ver [rate-limit.middleware.ts](apps/api/src/middleware/rate-limit.middleware.ts).
 
+### PWA — instalable + offline
+
+Configurada con [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app). Manifest inyectado en build, service worker generado con Workbox:
+
+- `/events*` → **NetworkFirst** con 5s timeout y 24h cache. Si Render está dormido, el usuario ve eventos cacheados mientras despierta.
+- `/profile-options` → **StaleWhileRevalidate**, 7 días.
+- Endpoints sensibles (`/auth/*`, `/me/*`, `/chat`, `/admin/*`) **nunca** se cachean.
+
+El `[InstallPrompt]` captura `beforeinstallprompt` y muestra card flotante en Android; en iOS el manifest + apple-touch-icon permiten "Agregar a pantalla de inicio" desde Safari. El `[UpdateBanner]` avisa cuando hay una nueva versión y dispara reload controlado. Ver [vite.config.ts](apps/web/vite.config.ts) y [src/components/](apps/web/src/components/).
+
+### API pública para comunidades
+
+Keys emitidas con `npm -w apps/api run keys:issue -- --owner "Flutter Ecuador"` (CLI) o vía formulario público en `/api`. Se hashean con SHA-256 antes de guardar (`api_keys.key_hash`), sólo devolvemos el plaintext al momento de emisión. Rate limit por key con ventana deslizante en memoria.
+
+El flujo de **alta con aprobación manual**:
+
+1. Usuario llena form en `/api` → `POST /public/keys/request` guarda pending.
+2. Webhook a Discord con embed + dos **magic links** firmados (JWT 72h, acción en el payload).
+3. Admin tap en "✅ Aprobar" desde Discord → `GET /admin/approve?token=...` emite la key, marca aprobada, manda email via Resend.
+4. Tap en "❌ Rechazar" → form HTML para motivo → `POST /admin/reject` envía email explicativo.
+
+"One-use" efectivo: si el link se reusa, el handler ve el nuevo status del request y responde "ya procesada". Ver [admin-tokens.ts](apps/api/src/lib/admin-tokens.ts) y [admin-magic.ts](apps/api/src/routes/admin-magic.ts).
+
 ---
 
 ## 📡 Endpoints
@@ -297,6 +350,22 @@ Limiter en memoria por userId (o IP si no hay sesión): **1 req/s y 30 req/hora*
 - `POST /me/events/:id/favorite` — toggle
 - `POST /me/events/:id/rsvp` — toggle
 - `POST /chat` — body `{message, profile}`
+
+### API pública — comunidades
+Requieren `Authorization: Bearer <key>` o `X-API-Key`. CORS `*`. Rate limit 1000/h por key.
+
+- `GET /public/v1/events` — `country`, `city`, `source`, `tag`, `q`, `upcoming`, `limit`, `offset`
+- `GET /public/v1/events/:id`
+- `GET /public/v1/countries` — conteo por país
+- `GET /public/v1/sources`
+- `GET /public/docs` — Scalar UI interactiva
+- `GET /public/openapi.json` — spec 3.1
+- `POST /public/keys/request` — formulario, rate-limit por IP (3/h)
+
+### Admin (magic-link desde Discord)
+- `GET /admin/approve?token=<jwt>` — aprueba + emite key + email
+- `GET /admin/reject?token=<jwt>` — form para motivo
+- `POST /admin/reject` — procesa rechazo + email
 
 ---
 
@@ -332,6 +401,7 @@ npm -w apps/api run db:studio        # GUI de Drizzle
 
 ## 📚 Docs adicionales
 
+- [CHANGELOG.md](CHANGELOG.md) — historial de releases
 - [docs/OVERVIEW.md](docs/OVERVIEW.md) — visión técnica general
 - [docs/PRESENTATION.md](docs/PRESENTATION.md) — script para demo en vivo
 - [docs/DEPLOY.md](docs/DEPLOY.md) — despliegue paso a paso

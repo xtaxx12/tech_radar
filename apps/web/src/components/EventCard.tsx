@@ -1,6 +1,6 @@
 import { memo, type MouseEvent } from 'react';
 import type { RankedEvent } from '../types';
-import { formatLongDate } from '../utils';
+import { formatLongDate, normalizeTitle } from '../utils';
 
 type Props = {
   event: RankedEvent;
@@ -27,6 +27,13 @@ function EventCardBase({
     compact ? 'event-card-compact' : ''
   ].filter(Boolean).join(' ');
 
+  // Pick the most differentiating reason — skip generic country/level matches
+  const bestReason = (() => {
+    const generic = /país seleccionado|nivel sugerido|nivel coincide/i;
+    const unique = event.reasons.find((r) => !generic.test(r));
+    return unique ?? event.reasons[0] ?? null;
+  })();
+
   const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     onToggleFavorite?.();
@@ -36,8 +43,11 @@ function EventCardBase({
     <article className={className}>
       <div className="event-card-topline">
         <div className="badges">
-          {event.badges.map((badge, index) => (
-            <span key={`${badge}-${index}`} className="badge">
+          {event.badges.slice(0, 2).map((badge, index) => (
+            <span
+              key={`${badge}-${index}`}
+              className={`badge${index === 0 && badge.toLowerCase().includes('para ti') ? ' badge-primary' : ''}`}
+            >
               {badge}
             </span>
           ))}
@@ -59,7 +69,7 @@ function EventCardBase({
         </div>
       </div>
 
-      <h3>{event.title}</h3>
+      <h3 className="event-card-title">{normalizeTitle(event.title)}</h3>
 
       {compact ? (
         <div className="event-meta">
@@ -76,13 +86,11 @@ function EventCardBase({
             <span>{event.source}</span>
           </div>
 
-          <div className="reason-list">
-            {event.reasons.slice(0, 3).map((reason, index) => (
-              <div key={index} className="reason-item">
-                {reason}
-              </div>
-            ))}
-          </div>
+          {bestReason ? (
+            <div className="reason-list">
+              <div className="reason-item">{bestReason}</div>
+            </div>
+          ) : null}
 
           <div className="tag-row">
             {event.tags.slice(0, 4).map((tag, index) => (
