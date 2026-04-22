@@ -77,9 +77,33 @@ export const userEvents = pgTable(
   })
 );
 
+// API keys para la API pública de comunidades. El `keyHash` guarda un hash
+// SHA-256 de la key real; nunca guardamos la key en texto plano para que un
+// leak de DB no exponga credenciales en uso.
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    owner: text('owner').notNull(),
+    label: text('label'),
+    keyHash: text('key_hash').notNull().unique(),
+    keyPrefix: text('key_prefix').notNull(), // primeros 8 chars, solo para identificar visualmente
+    rateLimitPerHour: text('rate_limit_per_hour').notNull().default('1000'),
+    revoked: boolean('revoked').notNull().default(false),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true, mode: 'string' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow()
+  },
+  (table) => ({
+    ownerIdx: index('api_keys_owner_idx').on(table.owner),
+    revokedIdx: index('api_keys_revoked_idx').on(table.revoked)
+  })
+);
+
 export type EventRow = typeof events.$inferSelect;
 export type EventInsert = typeof events.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
 export type UserEventRow = typeof userEvents.$inferSelect;
 export type UserEventInsert = typeof userEvents.$inferInsert;
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
+export type ApiKeyInsert = typeof apiKeys.$inferInsert;
