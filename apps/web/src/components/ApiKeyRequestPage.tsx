@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError, submitApiKeyRequest } from '../api';
+import { ApiError, getOpenApiSpecUrl, getPublicDocsUrl, submitApiKeyRequest } from '../api';
 
 type FieldErrors = Partial<Record<'owner' | 'email' | 'website' | 'useCase', string>>;
 
@@ -179,7 +179,7 @@ export function ApiKeyRequestPage({ onBack }: { onBack: () => void }) {
                 Solicitar key gratis →
               </button>
               <a
-                href="/public/docs"
+                href={getPublicDocsUrl()}
                 target="_blank"
                 rel="noopener"
                 className="secondary-button"
@@ -435,10 +435,10 @@ export function ApiKeyRequestPage({ onBack }: { onBack: () => void }) {
               probar requests en vivo pegando tu key.
             </p>
             <div className="api-footer-ctas">
-              <a href="/public/docs" target="_blank" rel="noopener" className="primary-button">
+              <a href={getPublicDocsUrl()} target="_blank" rel="noopener" className="primary-button">
                 Abrir docs interactivos
               </a>
-              <a href="/public/openapi.json" target="_blank" rel="noopener" className="secondary-button">
+              <a href={getOpenApiSpecUrl()} target="_blank" rel="noopener" className="secondary-button">
                 Descargar spec JSON
               </a>
             </div>

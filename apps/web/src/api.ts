@@ -80,10 +80,23 @@ export type ApiKeyRequestResponse = {
 };
 
 export function submitApiKeyRequest(input: ApiKeyRequestInput): Promise<ApiKeyRequestResponse> {
+  // credentials: 'omit' — el endpoint responde con Access-Control-Allow-Origin: *
+  // y el browser no deja combinar wildcard con credentials incluidas.
   return requestJson<ApiKeyRequestResponse>('/public/keys/request', {
     method: 'POST',
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
+    credentials: 'omit'
   });
+}
+
+export function getPublicDocsUrl(): string {
+  const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+  return `${base}/public/docs`;
+}
+
+export function getOpenApiSpecUrl(): string {
+  const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+  return `${base}/public/openapi.json`;
 }
 
 export type EventQueryFilters = {
