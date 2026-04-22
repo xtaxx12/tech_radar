@@ -76,6 +76,16 @@ export function ChatPanel({
             <h2>Inicia sesión para chatear</h2>
           </div>
         </div>
+        <div className="chat-preview" aria-hidden="true">
+          <div className="chat-preview-bubble chat-preview-user">
+            <span className="chat-preview-icon"><IconUser /></span>
+            <span>¿Qué eventos de Flutter hay este mes?</span>
+          </div>
+          <div className="chat-preview-bubble chat-preview-ai">
+            <span className="chat-preview-icon"><IconSparkle /></span>
+            <span>Encontré 3 eventos de Flutter en Ecuador este mes. El más relevante es...</span>
+          </div>
+        </div>
         <p className="muted chat-gate-copy">
           Limitamos el chat a usuarios autenticados para cuidar el presupuesto del modelo.
           El resto del radar sigue público.
