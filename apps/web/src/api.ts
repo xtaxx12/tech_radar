@@ -66,6 +66,26 @@ export function getProfileOptions(): Promise<ProfileOptions> {
   return requestJson<ProfileOptions>('/profile-options');
 }
 
+export type ApiKeyRequestInput = {
+  owner: string;
+  email: string;
+  website?: string;
+  useCase: string;
+};
+
+export type ApiKeyRequestResponse = {
+  ok: boolean;
+  id: string;
+  message: string;
+};
+
+export function submitApiKeyRequest(input: ApiKeyRequestInput): Promise<ApiKeyRequestResponse> {
+  return requestJson<ApiKeyRequestResponse>('/public/keys/request', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+}
+
 export type EventQueryFilters = {
   source?: string;
   country?: string;

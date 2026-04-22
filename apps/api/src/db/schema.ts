@@ -15,6 +15,7 @@ export const eventSourceEnum = pgEnum('event_source', ['meetup', 'eventbrite', '
 export const eventLevelEnum = pgEnum('event_level', ['junior', 'mid', 'senior', 'all']);
 export const summarySourceEnum = pgEnum('summary_source', ['ai', 'heuristic']);
 export const userEventTypeEnum = pgEnum('user_event_type', ['favorite', 'rsvp']);
+export const apiKeyRequestStatusEnum = pgEnum('api_key_request_status', ['pending', 'approved', 'rejected']);
 
 export const events = pgTable(
   'events',
@@ -99,6 +100,29 @@ export const apiKeys = pgTable(
   })
 );
 
+// Solicitudes de API keys que entran por el formulario público. El admin las
+// aprueba manualmente y al aprobar se emite una row en `api_keys`.
+export const apiKeyRequests = pgTable(
+  'api_key_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    owner: text('owner').notNull(),
+    website: text('website'),
+    email: text('email').notNull(),
+    useCase: text('use_case').notNull(),
+    status: apiKeyRequestStatusEnum('status').notNull().default('pending'),
+    reviewNote: text('review_note'),
+    apiKeyId: uuid('api_key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
+    requesterIp: text('requester_ip'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'string' })
+  },
+  (table) => ({
+    statusIdx: index('api_key_requests_status_idx').on(table.status),
+    emailIdx: index('api_key_requests_email_idx').on(table.email)
+  })
+);
+
 export type EventRow = typeof events.$inferSelect;
 export type EventInsert = typeof events.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -107,3 +131,5 @@ export type UserEventRow = typeof userEvents.$inferSelect;
 export type UserEventInsert = typeof userEvents.$inferInsert;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type ApiKeyInsert = typeof apiKeys.$inferInsert;
+export type ApiKeyRequestRow = typeof apiKeyRequests.$inferSelect;
+export type ApiKeyRequestInsert = typeof apiKeyRequests.$inferInsert;
