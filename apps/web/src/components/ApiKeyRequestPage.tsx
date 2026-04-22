@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ApiError, getOpenApiSpecUrl, getPublicDocsUrl, submitApiKeyRequest } from '../api';
+import { trackEvent } from '../lib/analytics';
 
 type FieldErrors = Partial<Record<'owner' | 'email' | 'website' | 'useCase', string>>;
 
@@ -101,6 +102,9 @@ export function ApiKeyRequestPage({ onBack }: { onBack: () => void }) {
     setSubmitting(true);
 
     try {
+      trackEvent('api_key_request_submitted', {
+        has_website: Boolean(website.trim())
+      });
       const response = await submitApiKeyRequest({
         owner: owner.trim(),
         email: email.trim(),
