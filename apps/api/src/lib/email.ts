@@ -1,6 +1,17 @@
-// Wrapper mínimo sobre Resend (https://resend.com). Si no hay RESEND_API_KEY,
-// las funciones retornan { sent: false } y el caller hace fallback a
-// mostrar la info por consola para email manual.
+// Envío de emails con estrategia de fallback:
+//   1. Resend si RESEND_API_KEY está configurada (mejor deliverability,
+//      dashboard, logs — recomendado para producción con dominio verificado).
+//   2. Gmail SMTP vía nodemailer si GMAIL_USER + GMAIL_APP_PASSWORD están
+//      configurados (no requiere verificar dominio, pero tiene límite de
+//      ~500 emails/día y deliverability más pobre).
+//   3. Si ninguno está disponible, retornamos { sent: false } y el caller
+//      (CLI de admin) imprime la key por consola para envío manual.
+//
+// Resend está en "testing mode" sin dominio verificado — solo deja enviar
+// al email con el que te registraste. Por eso el fallback a Gmail es útil
+// durante desarrollo: seguir emitiendo keys sin bloquear el flujo.
+
+import nodemailer, { type Transporter } from 'nodemailer';
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
@@ -10,15 +21,33 @@ type SendArgs = {
   html: string;
 };
 
-export type SendResult = { sent: true; id: string } | { sent: false; reason: string };
+export type SendResult = { sent: true; id: string; provider: 'resend' | 'gmail' } | { sent: false; reason: string };
 
-export async function sendEmail({ to, subject, html }: SendArgs): Promise<SendResult> {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.RESEND_FROM_EMAIL?.trim() || 'Tech Radar LATAM <onboarding@resend.dev>';
+export async function sendEmail(args: SendArgs): Promise<SendResult> {
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  const gmailUser = process.env.GMAIL_USER?.trim();
+  const gmailPassword = process.env.GMAIL_APP_PASSWORD?.trim();
 
-  if (!apiKey) {
-    return { sent: false, reason: 'RESEND_API_KEY no configurado' };
+  // 1. Intentamos Resend si está configurado.
+  if (resendKey) {
+    const result = await sendViaResend(args, resendKey);
+    if (result.sent) return result;
+    console.warn('[email] Resend falló, intentando fallback:', result.reason);
+    // Si no hay Gmail configurado, devolvemos el error de Resend tal cual
+    // para que el caller lo muestre.
+    if (!gmailUser || !gmailPassword) return result;
   }
+
+  // 2. Fallback a Gmail SMTP.
+  if (gmailUser && gmailPassword) {
+    return sendViaGmail(args, gmailUser, gmailPassword);
+  }
+
+  return { sent: false, reason: 'Ningún provider de email configurado (RESEND_API_KEY o GMAIL_USER + GMAIL_APP_PASSWORD).' };
+}
+
+async function sendViaResend(args: SendArgs, apiKey: string): Promise<SendResult> {
+  const from = process.env.RESEND_FROM_EMAIL?.trim() || 'Tech Radar LATAM <onboarding@resend.dev>';
 
   try {
     const response = await fetch(RESEND_URL, {
@@ -27,18 +56,62 @@ export async function sendEmail({ to, subject, html }: SendArgs): Promise<SendRe
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ from, to, subject, html })
+      body: JSON.stringify({ from, to: args.to, subject: args.subject, html: args.html })
     });
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      return { sent: false, reason: `Resend ${response.status}: ${body.slice(0, 200)}` };
+      return { sent: false, reason: `Resend ${response.status}: ${body.slice(0, 400)}` };
     }
 
     const data = (await response.json()) as { id?: string };
-    return { sent: true, id: data.id ?? 'unknown' };
+    return { sent: true, id: data.id ?? 'unknown', provider: 'resend' };
   } catch (error) {
     return { sent: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// Transporter lazy-cached por proceso. Gmail usa STARTTLS en el 587,
+// lo que es más universal que smtps en 465 y no pelea con firewalls.
+let gmailTransporter: Transporter | null = null;
+let gmailTransporterKey: string | null = null;
+
+function getGmailTransporter(user: string, pass: string): Transporter {
+  const key = `${user}|${pass.slice(0, 4)}`;
+  if (gmailTransporter && gmailTransporterKey === key) return gmailTransporter;
+
+  gmailTransporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // STARTTLS al cambiar el handshake
+    auth: { user, pass },
+    // Timeouts conservadores: Render tiene redes raras, no queremos que
+    // una request admin se cuelgue 2 min esperando SMTP.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000
+  });
+  gmailTransporterKey = key;
+  return gmailTransporter;
+}
+
+async function sendViaGmail(args: SendArgs, user: string, password: string): Promise<SendResult> {
+  const fromName = process.env.GMAIL_FROM_NAME?.trim() || 'Tech Radar LATAM';
+  const from = `${fromName} <${user}>`;
+
+  try {
+    const transporter = getGmailTransporter(user, password);
+    const info = await transporter.sendMail({
+      from,
+      to: args.to,
+      subject: args.subject,
+      html: args.html
+    });
+
+    return { sent: true, id: info.messageId, provider: 'gmail' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { sent: false, reason: `Gmail SMTP: ${message}` };
   }
 }
 

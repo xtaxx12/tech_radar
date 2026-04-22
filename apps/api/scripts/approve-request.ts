@@ -79,7 +79,7 @@ async function main() {
   });
 
   if (result.sent) {
-    console.log(`📬 Email enviado (id: ${result.id})`);
+    console.log(`📬 Email enviado vía ${result.provider} (id: ${result.id})`);
     console.log('   La key no se imprime aquí; el usuario la recibió por email.');
   } else {
     console.log(`⚠️  Email NO enviado: ${result.reason}`);

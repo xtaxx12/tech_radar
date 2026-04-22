@@ -42,7 +42,11 @@ async function main() {
   });
 
   console.log(`❌ Rechazada: ${request.owner} (${request.email})`);
-  console.log(result.sent ? `📬 Email enviado (id: ${result.id})` : `⚠️  Email NO enviado: ${result.reason}`);
+  console.log(
+    result.sent
+      ? `📬 Email enviado vía ${result.provider} (id: ${result.id})`
+      : `⚠️  Email NO enviado: ${result.reason}`
+  );
 }
 
 main()
