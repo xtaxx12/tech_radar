@@ -1,6 +1,7 @@
 import cors from 'cors';
 import { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
 import { createRateLimiter } from '../middleware/rate-limit.middleware.js';
+import { adminTokensEnabled, buildMagicLinks } from '../lib/admin-tokens.js';
 import { notifyNewKeyRequest } from '../lib/notifications.js';
 import { apiKeyRequestRepository } from '../repositories/api-key-request.repository.js';
 
@@ -62,12 +63,32 @@ export function buildKeyRequestRouter(): Router {
         requesterIp: clientIp(request)
       });
 
+      // Si hay secret configurado, emitimos magic links firmados para que
+      // el admin apruebe/rechace con un click desde Discord.
+      let approveUrl: string | undefined;
+      let rejectUrl: string | undefined;
+      if (adminTokensEnabled()) {
+        const apiBaseUrl =
+          process.env.API_BASE_URL?.trim() ||
+          process.env.PUBLIC_API_URL?.trim() ||
+          'https://tech-radar-api.onrender.com';
+        try {
+          const links = buildMagicLinks(apiBaseUrl, record.id);
+          approveUrl = links.approve;
+          rejectUrl = links.reject;
+        } catch (error) {
+          console.warn('[key-request] no pude firmar magic links:', error instanceof Error ? error.message : error);
+        }
+      }
+
       // Notificación async (no bloqueamos la response si falla).
       void notifyNewKeyRequest({
         owner,
         email,
         website: website || null,
-        useCase
+        useCase,
+        approveUrl,
+        rejectUrl
       });
 
       response.status(201).json({
