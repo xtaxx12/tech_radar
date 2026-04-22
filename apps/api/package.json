@@ -11,6 +11,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "keys:issue": "tsx scripts/issue-key.ts",
+    "keys:list": "tsx scripts/list-keys.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

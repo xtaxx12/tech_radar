@@ -15,6 +15,13 @@
       "when": 1776783510331,
       "tag": "0001_graceful_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776866239140,
+      "tag": "0002_new_tattoo",
+      "breakpoints": true
     }
   ]
 }
