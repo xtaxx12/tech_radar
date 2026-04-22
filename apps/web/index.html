@@ -3,31 +3,92 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tech Radar LATAM — Descubre eventos tech relevantes</title>
-    <meta name="description" content="Tech Radar LATAM: eventos de Meetup, Eventbrite y GDG filtrados por tu perfil con recomendaciones y chat IA en español." />
+
+    <title>Tech Radar LATAM — Eventos tech de LATAM personalizados con IA</title>
+    <meta
+      name="description"
+      content="Tech Radar LATAM agrega eventos de Meetup, Eventbrite y GDG Chapters y los filtra con IA según tu país, rol, nivel e intereses. Conferencias, meetups, workshops y hackathons en Ecuador, México, Perú, Colombia, Argentina y más."
+    />
+    <meta name="keywords" content="eventos tech LATAM, meetups Ecuador, conferencias tecnología, GDG LATAM, hackathons Latinoamérica, IA, React, Flutter" />
+    <meta name="author" content="Tech Radar LATAM" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#0b1020" />
 
+    <link rel="canonical" href="https://tech-radar-latam.vercel.app/" />
+
+    <!-- Open Graph — para previews en LinkedIn, Facebook, WhatsApp, Discord, etc. -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Tech Radar LATAM" />
-    <meta property="og:description" content="Eventos tech relevantes en Latinoamérica, personalizados por perfil y con chat IA." />
+    <meta property="og:site_name" content="Tech Radar LATAM" />
+    <meta property="og:title" content="Tech Radar LATAM — Eventos tech de LATAM personalizados con IA" />
+    <meta
+      property="og:description"
+      content="Agregador inteligente de eventos tech de Latinoamérica. Recomendaciones por IA, chat conversacional y app móvil nativa."
+    />
+    <meta property="og:url" content="https://tech-radar-latam.vercel.app/" />
     <meta property="og:locale" content="es_419" />
-    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta property="og:image" content="https://tech-radar-latam.vercel.app/icons/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Logo de Tech Radar LATAM — un radar estilizado con barrido y ping" />
 
-    <meta name="twitter:card" content="summary" />
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Tech Radar LATAM" />
-    <meta name="twitter:description" content="Eventos tech relevantes en Latinoamérica, personalizados por perfil y con chat IA." />
-    <meta name="twitter:image" content="/icons/icon-512.png" />
+    <meta
+      name="twitter:description"
+      content="Eventos tech de Latinoamérica filtrados con IA según tu perfil. Web + móvil + API pública para comunidades."
+    />
+    <meta name="twitter:image" content="https://tech-radar-latam.vercel.app/icons/icon-512.png" />
 
-    <!-- PWA icons: vite-plugin-pwa inyecta también el manifest.webmanifest en build. -->
+    <!-- PWA / iOS installable -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Tech Radar" />
 
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Structured Data (Schema.org JSON-LD) — ayuda a Google a entender qué es el sitio -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Tech Radar LATAM",
+        "url": "https://tech-radar-latam.vercel.app",
+        "description": "Agregador inteligente de eventos tech de Latinoamérica con recomendaciones personalizadas e IA conversacional.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "inLanguage": "es",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "creator": {
+          "@type": "Organization",
+          "name": "Tech Radar LATAM"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Tech Radar LATAM",
+        "url": "https://tech-radar-latam.vercel.app",
+        "logo": "https://tech-radar-latam.vercel.app/icons/icon-512.png",
+        "sameAs": [
+          "https://github.com/xtaxx12/tech_radar"
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

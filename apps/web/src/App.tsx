@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, getChatResponse, getEventDetail, getProfileOptions, getRecommendations, getSyncStatus, triggerSync } from './api';
+import { trackEvent, trackPageView } from './lib/analytics';
 import { useAuth } from './auth/AuthContext';
 import { GoogleSignIn } from './auth/GoogleSignIn';
 import { UserMenu } from './auth/UserMenu';
@@ -170,6 +171,22 @@ export default function App() {
     };
   }, []);
 
+  // Título dinámico + page_view a Google Analytics cuando cambia la ruta.
+  // Mejora SEO (cada vista reporta su propio <title>) y da insights de
+  // navegación en GA4.
+  useEffect(() => {
+    let title = 'Tech Radar LATAM — Eventos tech de LATAM personalizados con IA';
+    if (routePath === '/api' || routePath.startsWith('/api/')) {
+      title = 'API pública · Tech Radar LATAM';
+    } else if (routePath.startsWith('/events/')) {
+      title = selectedEvent?.title
+        ? `${selectedEvent.title} · Tech Radar LATAM`
+        : 'Evento · Tech Radar LATAM';
+    }
+    document.title = title;
+    trackPageView(routePath, title);
+  }, [routePath, selectedEvent]);
+
   useEffect(() => {
     const match = routePath.match(/^\/events\/([^/]+)$/);
 
@@ -289,6 +306,11 @@ export default function App() {
     setLoadingChat(true);
     setChatError(null);
     setChatRateLimit(null);
+    trackEvent('chat_submit', {
+      message_length: chatMessage.length,
+      country: profile.country,
+      role: profile.role
+    });
     getChatResponse(chatMessage, profile)
       .then((data) => setChatResponse(data))
       .catch((error: unknown) => {
@@ -323,6 +345,7 @@ export default function App() {
 
   const openEventAndRemember = (eventId: string) => {
     scrollPositionsRef.current['/'] = window.scrollY;
+    trackEvent('open_event', { event_id: eventId });
     openEvent(eventId);
   };
 
