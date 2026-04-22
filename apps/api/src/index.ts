@@ -17,6 +17,8 @@ import { buildRecommendationContext, enrichEvent, filterByInterpretation, genera
 import { normalizeText } from './lib/text.js';
 import { optionalAuth, requireAuth } from './middleware/auth.middleware.js';
 import { createRateLimiter } from './middleware/rate-limit.middleware.js';
+import { buildPublicApiRouter } from './routes/public-api.js';
+import { renderDocsPage, publicApiSpec } from './routes/public-docs.js';
 import { requireSyncAuth } from './middleware/sync-auth.middleware.js';
 import { eventRepository } from './repositories/event.repository.js';
 import { userEventRepository, type UserEventType } from './repositories/user-event.repository.js';
@@ -69,6 +71,17 @@ async function getTrendingEventIds(): Promise<Set<string>> {
 
 app.get('/health', (_request, response) => {
 	response.json({ ok: true, service: 'tech-radar-api', timestamp: new Date().toISOString() });
+});
+
+// API pública para comunidades (REST key-based). CORS abierto, rate limit por key.
+app.use('/public/v1', buildPublicApiRouter());
+
+// Documentación interactiva de la API pública (Scalar UI + OpenAPI JSON).
+app.get('/public/docs', (_request, response) => {
+	response.type('html').send(renderDocsPage());
+});
+app.get('/public/openapi.json', (_request, response) => {
+	response.json(publicApiSpec);
 });
 
 app.get('/auth/config', (_request, response) => {
