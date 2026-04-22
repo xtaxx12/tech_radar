@@ -387,14 +387,15 @@ export default function App() {
           </div>
           <a
             href="/api"
-            className="text-link-button api-topbar-link"
+            className="api-topbar-link"
             onClick={(event) => {
               event.preventDefault();
               window.history.pushState({}, '', '/api');
               window.dispatchEvent(new PopStateEvent('popstate'));
             }}
           >
-            API pública
+            <span className="api-topbar-icon" aria-hidden="true">{'{ }'}</span>
+            <span>API pública</span>
           </a>
           {authConfig?.enabled ? (user ? <UserMenu /> : <GoogleSignIn compact />) : null}
         </div>
