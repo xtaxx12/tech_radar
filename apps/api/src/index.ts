@@ -20,6 +20,7 @@ import { createRateLimiter } from './middleware/rate-limit.middleware.js';
 import { buildPublicApiRouter } from './routes/public-api.js';
 import { renderDocsPage, publicApiSpec } from './routes/public-docs.js';
 import { buildKeyRequestRouter } from './routes/key-request.js';
+import { buildAdminMagicRouter } from './routes/admin-magic.js';
 import { requireSyncAuth } from './middleware/sync-auth.middleware.js';
 import { eventRepository } from './repositories/event.repository.js';
 import { userEventRepository, type UserEventType } from './repositories/user-event.repository.js';
@@ -79,6 +80,9 @@ app.use('/public/v1', buildPublicApiRouter());
 
 // Solicitudes públicas de API key (formulario del sitio). Rate limit por IP.
 app.use('/public/keys', buildKeyRequestRouter());
+
+// Magic-link admin routes (aprobar/rechazar desde Discord).
+app.use('/admin', buildAdminMagicRouter());
 
 // Documentación interactiva de la API pública (Scalar UI + OpenAPI JSON).
 app.get('/public/docs', (_request, response) => {
