@@ -1,19 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ApiError, getChatResponse, getEventDetail, getProfileOptions, getRecommendations, getSyncStatus, triggerSync } from './api';
 import { trackEvent, trackPageView } from './lib/analytics';
 import { useAuth } from './auth/AuthContext';
 import { GoogleSignIn } from './auth/GoogleSignIn';
 import { UserMenu } from './auth/UserMenu';
-import { ApiKeyRequestPage } from './components/ApiKeyRequestPage';
 import { ChatPanel } from './components/ChatPanel';
 import { InstallPrompt } from './components/InstallPrompt';
 import { UpdateBanner } from './components/UpdateBanner';
 import { EventCard } from './components/EventCard';
 import { EventCardSkeletonGrid } from './components/EventCardSkeleton';
-import { EventDetail } from './components/EventDetail';
 import { EventsEmptyState } from './components/EventsEmptyState';
 import { FilterBar, type EventFilters } from './components/FilterBar';
 import { ProfileForm } from './components/ProfileForm';
+
+// Lazy loading: estas dos rutas son grandes y el usuario no las necesita al
+// aterrizar en home. Reduce el bundle inicial ~178 KiB según PageSpeed.
+const ApiKeyRequestPage = lazy(() =>
+  import('./components/ApiKeyRequestPage').then((m) => ({ default: m.ApiKeyRequestPage }))
+);
+const EventDetail = lazy(() =>
+  import('./components/EventDetail').then((m) => ({ default: m.EventDetail }))
+);
 import type { ChatResponse, ProfileOptions, RankedEvent, RecommendationsResponse, SyncStatus, UserProfile } from './types';
 
 const defaultProfile: UserProfile = {
@@ -350,7 +357,11 @@ export default function App() {
   };
 
   if (isApiRoute) {
-    return <ApiKeyRequestPage onBack={handleBackToRadar} />;
+    return (
+      <Suspense fallback={<DetailLoading onBack={handleBackToRadar} />}>
+        <ApiKeyRequestPage onBack={handleBackToRadar} />
+      </Suspense>
+    );
   }
 
   if (isEventRoute && detailLoading) {
@@ -363,16 +374,18 @@ export default function App() {
 
   if (selectedEvent) {
     return (
-      <EventDetail
-        event={selectedEvent}
-        onBack={handleBackToRadar}
-        isFavorite={favorites.has(selectedEvent.id)}
-        isGoing={rsvp.has(selectedEvent.id)}
-        canInteract={Boolean(user)}
-        authEnabled={Boolean(authConfig?.enabled)}
-        onToggleFavorite={user ? () => void toggleFavorite(selectedEvent.id) : undefined}
-        onToggleRsvp={user ? () => void toggleRsvp(selectedEvent.id) : undefined}
-      />
+      <Suspense fallback={<DetailLoading onBack={handleBackToRadar} />}>
+        <EventDetail
+          event={selectedEvent}
+          onBack={handleBackToRadar}
+          isFavorite={favorites.has(selectedEvent.id)}
+          isGoing={rsvp.has(selectedEvent.id)}
+          canInteract={Boolean(user)}
+          authEnabled={Boolean(authConfig?.enabled)}
+          onToggleFavorite={user ? () => void toggleFavorite(selectedEvent.id) : undefined}
+          onToggleRsvp={user ? () => void toggleRsvp(selectedEvent.id) : undefined}
+        />
+      </Suspense>
     );
   }
 
