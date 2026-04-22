@@ -277,7 +277,7 @@ export function buildAdminMagicRouter(): Router {
       });
 
       const detailMessage = emailResult.sent
-        ? `Email enviado a <strong>${record.email}</strong>. La key no se muestra aquí.`
+        ? `Email enviado vía <strong>${emailResult.provider}</strong> a <strong>${record.email}</strong>. La key no se muestra aquí.`
         : `Email NO enviado (${emailResult.reason}). La key es:<br/><br/>${issued.plaintext}<br/><br/>Cópiala y envíala manualmente.`;
 
       response.type('html').send(
