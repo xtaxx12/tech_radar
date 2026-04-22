@@ -3,6 +3,7 @@ import { ApiError, getChatResponse, getEventDetail, getProfileOptions, getRecomm
 import { useAuth } from './auth/AuthContext';
 import { GoogleSignIn } from './auth/GoogleSignIn';
 import { UserMenu } from './auth/UserMenu';
+import { ApiKeyRequestPage } from './components/ApiKeyRequestPage';
 import { ChatPanel } from './components/ChatPanel';
 import { EventCard } from './components/EventCard';
 import { EventCardSkeletonGrid } from './components/EventCardSkeleton';
@@ -311,6 +312,7 @@ export default function App() {
   const totalEvents = recommendations?.context.total ?? allEvents.length;
   const trendingCount = recommendations?.context.trending ?? 0;
   const isEventRoute = routePath.startsWith('/events/');
+  const isApiRoute = routePath === '/api' || routePath.startsWith('/api/');
   const hasFilters = Boolean(filters.source || filters.country || filters.city || filters.q);
   const showSkeleton = loadingProfile && recommendations === null;
   const isEmpty = profileReady && !showSkeleton && allEvents.length === 0;
@@ -321,6 +323,10 @@ export default function App() {
     scrollPositionsRef.current['/'] = window.scrollY;
     openEvent(eventId);
   };
+
+  if (isApiRoute) {
+    return <ApiKeyRequestPage onBack={handleBackToRadar} />;
+  }
 
   if (isEventRoute && detailLoading) {
     return <DetailLoading onBack={handleBackToRadar} />;
@@ -379,6 +385,17 @@ export default function App() {
               ? `${healthySources}/${totalSources} fuentes activas`
               : 'Conectando fuentes…'}
           </div>
+          <a
+            href="/api"
+            className="text-link-button api-topbar-link"
+            onClick={(event) => {
+              event.preventDefault();
+              window.history.pushState({}, '', '/api');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+          >
+            API pública
+          </a>
           {authConfig?.enabled ? (user ? <UserMenu /> : <GoogleSignIn compact />) : null}
         </div>
       </header>
