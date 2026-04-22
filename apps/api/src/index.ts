@@ -346,12 +346,53 @@ app.post('/sync', requireSyncAuth, asyncHandler(async (_request, response) => {
 	response.json({ ok: true, result });
 }));
 
-app.get('/sync/status', (_request, response) => {
+app.get('/sync/status', asyncHandler(async (_request, response) => {
+	const running = isSyncRunning();
+	const liveResult = getLastSyncResult();
+
+	// Si el proceso acaba de arrancar (cold start de Render u otro host),
+	// `lastResult` vive en memoria y se pierde. Pero la DB ya tiene eventos
+	// de syncs pasadas. Sin este fallback la UI muestra "Conectando fuentes…"
+	// aunque hay 300 eventos listos — mala señal para el usuario.
+	if (liveResult) {
+		response.json({ running, lastResult: liveResult });
+		return;
+	}
+
+	const events = await eventRepository.getAll().catch(() => [] as TechEvent[]);
+	if (events.length === 0) {
+		response.json({ running, lastResult: null });
+		return;
+	}
+
+	const counts = new Map<string, number>();
+	let latestUpdatedAt: string | null = null;
+	for (const event of events) {
+		counts.set(event.source, (counts.get(event.source) ?? 0) + 1);
+		if (!latestUpdatedAt || (event.updatedAt && event.updatedAt > latestUpdatedAt)) {
+			latestUpdatedAt = event.updatedAt ?? latestUpdatedAt;
+		}
+	}
+
+	const syntheticTimestamp = latestUpdatedAt ?? new Date().toISOString();
 	response.json({
-		running: isSyncRunning(),
-		lastResult: getLastSyncResult()
+		running,
+		lastResult: {
+			fetched: events.length,
+			cleaned: events.length,
+			deduped: events.length,
+			saved: events.length,
+			startedAt: syntheticTimestamp,
+			finishedAt: syntheticTimestamp,
+			sources: [...counts.entries()].map(([source, count]) => ({
+				source,
+				count,
+				usedFallback: false,
+				error: undefined
+			}))
+		}
 	});
-});
+}));
 
 app.post('/chat', chatAuthGate, chatRateLimiter.middleware, asyncHandler(async (request, response) => {
 	const message = String(request.body?.message ?? '').slice(0, 2000);
