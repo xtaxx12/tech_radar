@@ -22,6 +22,13 @@
       "when": 1776866239140,
       "tag": "0002_new_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776868073751,
+      "tag": "0003_hesitant_living_lightning",
+      "breakpoints": true
     }
   ]
 }
